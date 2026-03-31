@@ -1,0 +1,28 @@
+# CMake 빌드 디렉토리 및 파일 (어디에 생길지 모르므로 ** 사용)
+/soslab_api/include/version.h
+/.vscode/settings.json
+/_archive_/
+/build/
+/CMakeCache.txt
+/CMakeFiles/
+/Makefile
+/cmake_install.cmake
+/CTestTestfile.cmake
+/sample_data/layout.ini
+
+
+# ROS Output
+
+# Ubuntu ROS Examples
+/examples/ros_ml/build
+/examples/ros_ml/devel
+/examples/ros_ml/.catkin_workspace
+/examples/ros_ml/src/CMakeLists.txt
+/examples/ros_ml/src/ml/include/*
+/examples/ros_ml/src/ml/libsoslab/*
+
+/examples/ros2_ml/build
+/examples/ros2_ml/install
+/examples/ros2_ml/log
+/examples/ros2_ml/src/ml/include/*
+/examples/ros2_ml/src/ml/libsoslab/*
