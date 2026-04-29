@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(SOSLAB_SDK VERSION 1.0.0)
+project(SOSLAB_SDK VERSION 1.0.1)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/_archive_")
