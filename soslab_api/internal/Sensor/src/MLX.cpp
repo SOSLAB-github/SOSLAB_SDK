@@ -621,6 +621,8 @@ bool soslab::MLX::buildStreamData(const std::vector<uint8_t>& packetData)
 	uint8_t row_number = header.row_number;
 	const uint8_t* dataPtr = packetData.data() + sizeof(header);
 
+	frameData.timestamp[row_number] = header.timestamp;
+
 	size_t row_start_ambient = row_number * 576;
 	size_t row_start_data = row_number * 192;
 

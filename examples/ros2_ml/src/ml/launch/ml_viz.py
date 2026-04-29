@@ -8,7 +8,7 @@ def generate_launch_description():
     # Node 1 (Device 0)
     ml_node = Node(
         package="ml",
-        executable="ml_node",          # 기존 파일과 동일 :contentReference[oaicite:1]{index=1}
+        executable="ml_node",
         name="ml_node",
         output="screen",
         emulate_tty=True,
@@ -22,7 +22,7 @@ def generate_launch_description():
     )
 
     # RViz
-    rviz_config_file = os.path.join('../rviz', 'config.rviz')  # 기존 파일 유지 :contentReference[oaicite:2]{index=2}
+    rviz_config_file = os.path.join('../rviz', 'config.rviz')
     rviz_node = Node(
         package="rviz2",
         executable="rviz2",

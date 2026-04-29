@@ -161,8 +161,21 @@ private:
 
     const int id = 0;
 
-
     auto msg = build_pointcloud(scene);
+
+    if(scene->timestamp.size() != 0)
+    {
+      uint64_t timestamp = scene->timestamp[scene->timestamp.size() - 1];
+      time_t sec = timestamp / 1'000'000'000ULL;
+      uint64_t nsec = timestamp % 1'000'000'000ULL;
+
+      struct tm* ml_tm = localtime(&sec);
+      std::cout << "time: " << 1900 + ml_tm->tm_year << "."
+      << ml_tm->tm_mon + 1 << "." << ml_tm->tm_mday << " ";
+      std::cout << ml_tm->tm_hour << ":" << ml_tm->tm_min << ":"
+      << ml_tm->tm_sec << ":" << nsec << std::endl;
+    }
+
     msg->header.stamp = this->get_clock()->now();
     pc_pub_[id]->publish(std::move(msg));
   }

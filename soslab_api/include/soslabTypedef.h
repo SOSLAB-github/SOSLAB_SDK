@@ -85,12 +85,13 @@ namespace soslab
 		uint8_t frameNum;
 		uint8_t lidarId;
 
+		std::vector<uint64_t> timestamp;
 		std::vector<uint32_t> ambient;
 		std::vector<std::vector<uint32_t>> intensity;
 		std::vector<std::vector<uint32_t>> depth;
 		std::vector<std::vector<Points>> points;
 
-		FrameData() : lidarId(0), frameNum(0), cols(192), rows(56), echoNum(2), ambient(rows * 576), intensity(echoNum, std::vector<uint32_t>(rows* cols, 0)), depth(echoNum, std::vector<uint32_t>(rows* cols, 0)), points(echoNum, std::vector<Points>(rows* cols, Points())) {}
+		FrameData() : lidarId(0), frameNum(0), cols(192), rows(56), echoNum(2), timestamp(rows), ambient(rows * 576), intensity(echoNum, std::vector<uint32_t>(rows* cols, 0)), depth(echoNum, std::vector<uint32_t>(rows* cols, 0)), points(echoNum, std::vector<Points>(rows* cols, Points())) {}
 	};
 
 	enum class lidarType

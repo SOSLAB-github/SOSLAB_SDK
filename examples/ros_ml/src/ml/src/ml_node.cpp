@@ -48,6 +48,19 @@ void ml_scene_data_callback(std::shared_ptr<const soslab::FrameData> scene)
     const std::size_t height = static_cast<std::size_t>(scene->rows);
     const std::size_t width  = static_cast<std::size_t>(scene->cols);
     
+    if(scene->timestamp.size() != 0)
+    {
+      uint64_t timestamp = scene->timestamp[scene->timestamp.size() - 1];
+      time_t sec = timestamp / 1'000'000'000ULL;
+      uint64_t nsec = timestamp % 1'000'000'000ULL;
+
+      struct tm* ml_tm = localtime(&sec);
+      std::cout << "time: " << 1900 + ml_tm->tm_year << "."
+      << ml_tm->tm_mon + 1 << "." << ml_tm->tm_mday << " ";
+      std::cout << ml_tm->tm_hour << ":" << ml_tm->tm_min << ":"
+      << ml_tm->tm_sec << ":" << nsec << std::endl;
+    }
+
     PointCloud_T::Ptr target_msg = PointCloud_T::Ptr(new PointCloud_T);
     ros::Publisher& target_pub = pub_lidar_[id];
 

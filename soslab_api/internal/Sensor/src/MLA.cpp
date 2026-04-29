@@ -20,6 +20,7 @@ soslab::MLA::MLA()
 	{
 		frameData.echoNum = 1;
 		frameData.lidarId = 0;
+		frameData.timestamp.resize(numRow);
 		frameData.ambient.resize(numTotalSize);
 		frameData.depth[0].resize(numTotalSize);
 		frameData.intensity[0].resize(numTotalSize);
@@ -144,6 +145,8 @@ bool soslab::MLA::buildStreamData(const std::vector<uint8_t>& packetData)
 
 	uint8_t row_number = header.row_number;
 	const uint8_t* dataPtr = packetData.data() + sizeof(header);
+
+	frameData.timestamp[row_number] = header.timestamp;
 
 	size_t row_start_ambient = row_number * 576;
 	size_t row_start_data = row_number * 192;
