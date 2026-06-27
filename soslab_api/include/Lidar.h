@@ -110,9 +110,10 @@ namespace soslab
 		bool setAreaSelection(uint8_t compareNum, const uint8_t areaIdx0, const uint8_t areaIdx1, const uint8_t areaIdx2, const uint8_t areaIdx3);
 		bool getAreaInfofromSensor(soslab::area::Area& area, uint8_t areaIndex);
 
-	private:
+	protected:
 		std::unique_ptr<LidarImpl> impl_;
 
+	private:
 		void initializer();
 
 		lidarParameters userParameter;

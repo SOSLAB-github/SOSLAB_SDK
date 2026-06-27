@@ -287,8 +287,9 @@ bool soslab::LidarImpl::connectLidar()
 {
 	initializer();
 
-	sensorInterface = Sensor::createInstance(userParameter.lidarTypeValue);
-	if (!sensorInterface)
+	sensorInterface = createSensorInstance(userParameter.lidarTypeValue);
+	
+	if (sensorInterface == nullptr)
 	{
 		std::cerr << "Failed to create sensor interface.\n";
 		return false;
@@ -300,10 +301,8 @@ bool soslab::LidarImpl::connectLidar()
 	qs.frameQ = sizeFrameBuffer;
 	qs.commandQ = sizeCommandBuffer;
 
-	runtime_ = std::make_shared<LidarRuntime>(sensorInterface, userParameter, qs);
-
-	runtime_->setDataCallback(dataCallback);
-	runtime_->setAreaCallback(areaCallback);
+	runtime_ = createRuntimeInstance(sensorInterface, qs);
+	configureRuntime();
 
 	if (!runtime_->start())
 	{
@@ -378,9 +377,8 @@ bool soslab::LidarImpl::playStart(const std::string filePath)
 	qs.frameQ = sizeFrameBuffer;
 	qs.commandQ = sizeCommandBuffer;
 
-	runtime_ = std::make_shared<LidarRuntime>(nullptr, userParameter, qs);
-	runtime_->setDataCallback(dataCallback);
-	runtime_->setAreaCallback(areaCallback);
+	runtime_ = createRuntimeInstance(nullptr, qs);
+	configureRuntime();
 
 	const bool retval = runtime_->playStart(filePath);
 	if (retval)
@@ -1025,6 +1023,27 @@ bool soslab::LidarImpl::getAreaInfofromSensor(soslab::area::Area& area, uint8_t 
 	area = outMsg.area;
 
 	return retval;
+}
+
+std::shared_ptr<soslab::Sensor> soslab::LidarImpl::createSensorInstance(lidarType type)
+{
+	return Sensor::createInstance(type);
+}
+
+std::shared_ptr<soslab::LidarRuntime> soslab::LidarImpl::createRuntimeInstance(std::shared_ptr<Sensor> sensor, const LidarRuntime::QueueSizes& sizes)
+{
+	return std::make_shared<LidarRuntime>(std::move(sensor), userParameter, sizes, [this](lidarType type) { return this->createSensorInstance(type); });
+}
+
+void soslab::LidarImpl::configureRuntime()
+{
+	if (!runtime_)
+	{
+		return;
+	}
+
+	runtime_->setDataCallback(dataCallback);
+	runtime_->setAreaCallback(areaCallback);
 }
 
 bool soslab::LidarImpl::saveAreaLUTToFlash(soslab::util::Endianness endian)

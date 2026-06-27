@@ -30,7 +30,7 @@ namespace soslab
 
 		LidarImpl();
 		LidarImpl(const soslab::lidarParameters& params);
-		~LidarImpl();
+		virtual ~LidarImpl();
 
 		void setParameters(const soslab::lidarParameters& params);
 		void setParameters(const std::string& paramPath);
@@ -92,14 +92,18 @@ namespace soslab
 		bool setAreaSelection(uint8_t compareNum, const uint8_t areaIdx0, const uint8_t areaIdx1, const uint8_t areaIdx2, const uint8_t areaIdx3, soslab::util::Endianness endian = soslab::util::Endianness::Little);
 		bool getAreaInfofromSensor(soslab::area::Area& area, uint8_t areaIndex, soslab::util::Endianness endian = soslab::util::Endianness::Little);
 
-	private:
-		void initializer();
-		lidarParameters parserParamterFile(const std::string& paramPath);
+	protected:
+		virtual std::shared_ptr<Sensor> createSensorInstance(lidarType type);
+		virtual std::shared_ptr<LidarRuntime> createRuntimeInstance(std::shared_ptr<Sensor> sensor, const LidarRuntime::QueueSizes& sizes);
+		virtual void configureRuntime();
 
+		lidarParameters userParameter;
 		std::shared_ptr<Sensor>  sensorInterface;
 		std::shared_ptr<LidarRuntime> runtime_;
 
-		lidarParameters userParameter;
+	private:
+		void initializer();
+		lidarParameters parserParamterFile(const std::string& paramPath);
 
 		size_t sizeRawBuffer = 256;
 		size_t sizeFrameBuffer = 8;
@@ -107,8 +111,8 @@ namespace soslab
 
 
 		//Callback
-		LidarDataCallback dataCallback;
-		AreaDataCallback areaCallback;
+		LidarDataCallback      dataCallback;
+		AreaDataCallback       areaCallback;
 	};
 }
 

@@ -25,9 +25,11 @@ namespace soslab
 	public:
 		using json_t = nlohmann::json;
 
+		using sensorCreator = std::function<std::shared_ptr<Sensor>(lidarType)>;
+
 		struct QueueSizes
 		{
-			size_t rawPacketQ = 256; // UDP payload queue
+			size_t rawPacketQ = 1024; // UDP payload queue
 			size_t tcpPacketQ = 8;   // TCP payload queue
 			size_t frameQ = 8;   // parsed frames
 			size_t commandQ = 3;   // json/binary ack/alarm
@@ -39,9 +41,10 @@ namespace soslab
 	public:
 		LidarRuntime(std::shared_ptr<Sensor> sensor,
 			const soslab::lidarParameters& params,
-			const QueueSizes& sizes);
+			const QueueSizes& sizes,
+			sensorCreator sensorCreator);
 
-		~LidarRuntime();
+		virtual ~LidarRuntime();
 
 		bool start();
 		void stop();
@@ -49,10 +52,10 @@ namespace soslab
 		bool isConnected() const;
 		bool isRunning() const { return running_.load(); }
 
-		void setDataCallback(LidarDataCallback cb) { dataCb_ = std::move(cb); }
-		void clearDataCallback() { dataCb_ = nullptr; }
-		void setAreaCallback(AreaDataCallback cb) { areaCb_ = std::move(cb); }
-		void clearAreaCallback() { areaCb_ = nullptr; }
+		void setDataCallback(LidarDataCallback cb)           { dataCb_      = std::move(cb); }
+		void clearDataCallback()                              { dataCb_      = nullptr; }
+		void setAreaCallback(AreaDataCallback cb)            { areaCb_      = std::move(cb); }
+		void clearAreaCallback()                             { areaCb_      = nullptr; }
 
 		bool sendTcp(const std::vector<uint8_t>& bytes);
 		bool sendUdp(const std::vector<uint8_t>& bytes);
@@ -77,16 +80,22 @@ namespace soslab
 		std::shared_ptr<Sensor> sensor() const { return sensor_; }
 		soslab::lidarType lidarTypeValue() const { return params_.lidarTypeValue; }
 
+	protected:
+		virtual bool startWorkers_();
+		virtual void stopWorkers_();
+
+		virtual void createQueues_();
+		virtual void attachQueues_();
+		virtual void detachQueues_();
+
+		std::shared_ptr<Sensor> sensor_;
+		soslab::lidarParameters params_;
+		QueueSizes sizes_;
+		std::atomic<bool> running_{ false };
+
 	private:
 		bool connect_();
 		bool disconnect_();
-
-		bool startWorkers_();
-		void stopWorkers_();
-
-		void createQueues_();
-		void attachQueues_();
-		void detachQueues_();
 
 		bool connectNetlinks_();
 		void disconnectNetlinks_();
@@ -99,10 +108,7 @@ namespace soslab
 		void routeTcpPayload_(const std::vector<uint8_t>& pkt);
 		void routeUdpPayload_(const std::vector<uint8_t>& pkt);
 
-	private:
-		std::shared_ptr<Sensor> sensor_;
-		soslab::lidarParameters params_;
-		QueueSizes sizes_;
+		sensorCreator sensorCreator_;
 
 		// Infrastructure
 		std::shared_ptr<Netlink> tcp_;
@@ -112,22 +118,21 @@ namespace soslab
 		// Queues
 		std::shared_ptr<RingBuffer<std::vector<uint8_t>>>   tcpPacketQ_;
 		std::shared_ptr<RingBuffer<std::vector<uint8_t>>>   udpPacketQ_;
-		std::shared_ptr<RingBuffer<std::shared_ptr<FrameData>>> frameQ_;
+		std::shared_ptr<RingBuffer<std::shared_ptr<FrameData>>>     frameQ_;
 
 		std::shared_ptr<RingBuffer<std::vector<uint8_t>>>   commandQ_;
 		std::shared_ptr<RingBuffer<std::vector<uint8_t>>>   areaAlarmPacketQ_;
 		std::shared_ptr<RingBuffer<AreaAlarmData>>          areaAlarmQ_;
 
 		// Threads
-		std::atomic<bool> running_{ false };
 		std::shared_ptr<std::thread> tcpTh_;
 		std::shared_ptr<std::thread> udpTh_;
 		std::shared_ptr<std::thread> frameCbTh_;
 		std::shared_ptr<std::thread> alarmTh_;
 
 		// Callbacks
-		LidarDataCallback dataCb_{ nullptr };
-		AreaDataCallback  areaCb_{ nullptr };
+		LidarDataCallback      dataCb_{ nullptr };
+		AreaDataCallback       areaCb_{ nullptr };
 
 		bool isPlayMode_ = false;
 		std::atomic<bool> isRecordMode_{ false };

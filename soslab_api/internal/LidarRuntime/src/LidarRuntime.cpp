@@ -13,8 +13,12 @@ static void joinAndReset(std::shared_ptr<std::thread>& th)
 
 soslab::LidarRuntime::LidarRuntime(std::shared_ptr<Sensor> sensor,
 	const soslab::lidarParameters& params,
-	const QueueSizes& sizes)
-	: sensor_(std::move(sensor)), params_(params), sizes_(sizes)
+	const QueueSizes& sizes,
+	sensorCreator sensorCreator)
+	: sensor_(std::move(sensor))
+	, sensorCreator_(std::move(sensorCreator))
+	, params_(params)
+	, sizes_(sizes)
 {
 }
 
@@ -196,7 +200,18 @@ bool soslab::LidarRuntime::playStart(const std::string& filepath)
 	params_.lidarTypeValue = detected;
 
 	sensor_.reset();
-	sensor_ = Sensor::createInstance(detected);
+
+	if (!sensorCreator_)
+	{
+		std::cerr << "sensorCreator_ is not configured\n";
+		fileIO_->close();
+		fileIO_.reset();
+		isPlayMode_ = false;
+		return false;
+	}
+
+	sensor_ = sensorCreator_(detected);
+
 	if (!sensor_)
 	{
 		std::cerr << "Sensor::createInstance failed for detected type\n";
@@ -272,7 +287,7 @@ void soslab::LidarRuntime::createQueues_()
 {
 	if (!tcpPacketQ_) tcpPacketQ_ = std::make_shared<RingBuffer<std::vector<uint8_t>>>(sizes_.tcpPacketQ);
 	if (!udpPacketQ_) udpPacketQ_ = std::make_shared<RingBuffer<std::vector<uint8_t>>>(sizes_.rawPacketQ);
-	if (!frameQ_)     frameQ_ = std::make_shared<RingBuffer<std::shared_ptr<FrameData>>>(sizes_.frameQ);
+	if (!frameQ_)     frameQ_     = std::make_shared<RingBuffer<std::shared_ptr<FrameData>>>(sizes_.frameQ);
 
 	if (!commandQ_)       commandQ_ = std::make_shared<RingBuffer<std::vector<uint8_t>>>(sizes_.commandQ);
 	if (!areaAlarmPacketQ_) areaAlarmPacketQ_ = std::make_shared<RingBuffer<std::vector<uint8_t>>>(sizes_.commandQ);
