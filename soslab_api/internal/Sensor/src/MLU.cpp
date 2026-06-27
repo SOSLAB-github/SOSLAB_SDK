@@ -84,10 +84,10 @@ bool soslab::MLU::parseCommand(const Request& req, const std::vector<uint8_t>& p
 
 soslab::packetStatus soslab::MLU::classifyPacket(const std::vector<uint8_t>& pkt) const
 {
-	if (pkt.size() < sizeof(header::headerMLU)) return packetStatus::INVALID;
+	if (pkt.size() < sizeof(header::headerMLUv10)) return packetStatus::INVALID;
 
-	header::headerMLU h{};
-	std::memcpy(&h, pkt.data(), sizeof(header::headerMLU));
+	header::headerMLUv10 h{};
+	std::memcpy(&h, pkt.data(), sizeof(header::headerMLUv10));
 
 	if (memcmp(h.header, "MUUSR", 5) == 0)
 		return packetStatus::STREAM;
@@ -136,23 +136,37 @@ bool soslab::MLU::parseStreamData(const std::vector<uint8_t>& packetData)
 bool soslab::MLU::buildStreamData(const std::vector<uint8_t>& packetData)
 {
 	bool retval = false;
-	header::headerMLU headerInfo;
+	header::headerMLUv20 headerInfo;
 
 	int hroll = 0;
 	int vroll = 0;
 	int offset = 0;
-
-	memcpy(reinterpret_cast<char*>(&headerInfo), packetData.data(), sizeof(header::headerMLU));
-	offset += sizeof(header::headerMLU);
-
 	int numbering = 0;
+	uint64_t timestamp;
 
-	if (memcmp(headerInfo.header, "MUUSR", 5) == 0)
+	if (packetData.size() < sizeof(header::headerMLUv10)) return false;
+
+	memcpy(reinterpret_cast<char*>(&headerInfo), packetData.data(), sizeof(header::headerMLUv20));
+
+	if (headerInfo.header[5] == '1')
 	{
+		header::headerMLUv10 headerInfov10;
+		memcpy(reinterpret_cast<char*>(&headerInfov10), packetData.data(), sizeof(header::headerMLUv10));
+		offset += sizeof(header::headerMLUv10);
+		numbering = headerInfov10.header[7] - '0';
+
+		hroll = (headerInfov10.hroll_vroll) >> 6;
+		vroll = headerInfov10.hroll_vroll & 0x3F;
+		timestamp = headerInfov10.timestamp;
+	}
+	else if(headerInfo.header[5] == '2')
+	{
+		offset += sizeof(header::headerMLUv20);
 		numbering = headerInfo.header[7] - '0';
 
-		hroll = (headerInfo.hroll_vroll) >> 6;
-		vroll = headerInfo.hroll_vroll & 0x3F;
+		hroll = headerInfo.hroll;
+		vroll = headerInfo.vroll;
+		timestamp = headerInfo.timestamp;
 	}
 	else
 	{
@@ -161,7 +175,7 @@ bool soslab::MLU::buildStreamData(const std::vector<uint8_t>& packetData)
 
 	FrameData& frameData = frameDataVec[numbering];
 	frameData.lidarId = numbering;
-	frameData.timestamp[vroll] = headerInfo.timestamp;
+	frameData.timestamp[vroll] = timestamp;
 
 	for (int r = 0; r < numSegmentRow; r++)
 	{

@@ -6,6 +6,7 @@ project(${PROJECT_NAME})
 
 file(GLOB HEADER_FILES
     include/*.h
+    ${UTILL_INCLUDE_DIR}/ProtocolHeader.h
 )
 file(GLOB SRC_FILES src/*.cpp)
 

@@ -1,5 +1,5 @@
 #include "FileIO.h"
-#include "../Sensor/include/Sensor.h"
+#include "ProtocolHeader.h"
 #include <cstring>
 
 soslab::FileIO::FileIO(const std::string& path, FileMode mode)
@@ -180,11 +180,25 @@ bool soslab::FileIO::preprocessFile()
 			{
 				detectedLidarType = soslab::lidarType::MLU;
 			}
-			header::headerMLU headerInfo;
-			memcpy(reinterpret_cast<char*>(&headerInfo), readData.data(), sizeof(header::headerMLU));
+			header::headerMLUv20 headerInfo;
+			memcpy(reinterpret_cast<char*>(&headerInfo), readData.data(), sizeof(header::headerMLUv20));
 
-			int hroll = (headerInfo.hroll_vroll) >> 6;
-			int vroll = headerInfo.hroll_vroll & 0x3F;
+			int hroll = 0;
+			int vroll = 0;
+
+			if (headerInfo.header[5] == '1')
+			{
+				header::headerMLUv10 headerInfov10;
+				memcpy(reinterpret_cast<char*>(&headerInfov10), readData.data(), sizeof(header::headerMLUv10));
+
+				hroll = (headerInfov10.hroll_vroll) >> 6;
+				vroll = headerInfov10.hroll_vroll & 0x3F;
+			}
+			else if (headerInfo.header[5] == '2')
+			{
+				hroll = headerInfo.hroll;
+				vroll = headerInfo.vroll;
+			}
 
 			if (vroll == 0)
 			{
