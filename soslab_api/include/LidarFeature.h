@@ -42,18 +42,6 @@
 
 namespace soslab
 {
-	inline const char* toString(soslab::lidarType t)
-	{
-		switch (t)
-		{
-		case soslab::lidarType::GL5: return "GL5";
-		case soslab::lidarType::MLX: return "MLX";
-		case soslab::lidarType::MLU: return "MLU";
-		case soslab::lidarType::SLU: return "SLU";
-		default: return "Unknown";
-		}
-	}
-
 	enum class SetMode : uint8_t { Get, Set };
 
 	enum class Feature
@@ -93,7 +81,7 @@ namespace soslab
 
 	struct Request
 	{
-		Feature feature;
+		Feature feature{ Feature::Unknown };
 		SetMode mode{ SetMode::Set };
 	};
 
