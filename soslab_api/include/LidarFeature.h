@@ -67,6 +67,7 @@ namespace soslab
 		GetAreaLUT,
 		SelectArea,
 		// MLU
+		PTPStatus,
 		// SLU
 		Setting,
 		SDPSetting,

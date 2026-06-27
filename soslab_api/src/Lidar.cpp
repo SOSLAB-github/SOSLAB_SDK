@@ -212,6 +212,15 @@ bool soslab::Lidar::getAreaInfofromSensor(soslab::area::Area& area, uint8_t area
 }
 
 /* ************** */
+/* MLU interfaces */
+/* ************** */
+
+bool soslab::Lidar::getPTPStatus(std::string& status, std::string& ptpSource, uint64_t& timeOffsetNsec)
+{
+	return impl_->getPTPStatus(status, ptpSource, timeOffsetNsec);
+}
+
+/* ************** */
 /* SLU interfaces */
 /* ************** */
 

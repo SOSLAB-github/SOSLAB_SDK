@@ -92,6 +92,11 @@ namespace soslab
 		bool setAreaSelection(uint8_t compareNum, const uint8_t areaIdx0, const uint8_t areaIdx1, const uint8_t areaIdx2, const uint8_t areaIdx3, soslab::util::Endianness endian = soslab::util::Endianness::Little);
 		bool getAreaInfofromSensor(soslab::area::Area& area, uint8_t areaIndex, soslab::util::Endianness endian = soslab::util::Endianness::Little);
 
+		/* ************** */
+		/* MLU interfaces */
+		/* ************** */
+		bool getPTPStatus(std::string& status, std::string& ptpSource, uint64_t& timeOffsetNsec);
+
 	protected:
 		virtual std::shared_ptr<Sensor> createSensorInstance(lidarType type);
 		virtual std::shared_ptr<LidarRuntime> createRuntimeInstance(std::shared_ptr<Sensor> sensor, const LidarRuntime::QueueSizes& sizes);

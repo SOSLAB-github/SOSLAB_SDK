@@ -44,6 +44,7 @@ bool soslab::MLU::supports(Feature f) const
 	switch (f)
 	{
 	case Feature::StreamEnable:
+	case Feature::PTPStatus:
 		return true;
 	default:
 		std::cerr << "Selected feature is not supported in MLU.\n";
@@ -62,6 +63,7 @@ bool soslab::MLU::buildCommand(const Request& req, soslab::MessageBase& msg, std
 	switch (req.feature)
 	{
 	case Feature::StreamEnable:		totalProtocol = createBooleanMessage("command", msg); break;
+	case Feature::PTPStatus:		totalProtocol = createRequestMessage("command", req); break;
 	default:						std::cerr << "Wrong feature to build MLU command.\n"; return false;
 
 	}
@@ -75,6 +77,7 @@ bool soslab::MLU::parseCommand(const Request& req, const std::vector<uint8_t>& p
 	switch (req.feature)
 	{
 	case Feature::StreamEnable:		retval = validateJsonAck(pkt, out); break;
+	case Feature::PTPStatus:		retval = validatePTPStatusMessageAck(pkt, out); break;
 	default:				std::cerr << "Wrong feature to build MLU command.\n"; return false;
 	}
 
@@ -111,6 +114,25 @@ std::vector<std::vector<uint8_t>> soslab::MLU::createBooleanMessage(std::string 
 	return totalCmd;
 }
 
+std::vector<std::vector<uint8_t>> soslab::MLU::createRequestMessage(std::string key, const soslab::Request& req)
+{
+	std::vector<std::vector<uint8_t>> totalCmd;
+	std::vector<uint8_t> cmd;
+
+	json_t payload;
+
+	switch (req.feature)
+	{
+		case Feature::PTPStatus: payload[key] = "read_ptp_sts"; break;
+	}
+
+	std::string jsonStr = payload.dump();
+
+	cmd.assign(jsonStr.begin(), jsonStr.end());
+	totalCmd.push_back(cmd);
+	return totalCmd;
+}
+
 bool soslab::MLU::validateJsonAck(const std::vector<uint8_t>& ack, soslab::MessageBase& out)
 {
 	bool retval = false;
@@ -122,6 +144,35 @@ bool soslab::MLU::validateJsonAck(const std::vector<uint8_t>& ack, soslab::Messa
 		{
 			retval = true;
 			return ackJson["json_ack"].get<bool>();
+		}
+	}
+
+	return retval;
+}
+
+bool soslab::MLU::validatePTPStatusMessageAck(const std::vector<uint8_t>& ack, soslab::MessageBase& out)
+{
+	soslab::Message::MLU::PTPStatusMessage* outMsg = static_cast<soslab::Message::MLU::PTPStatusMessage*>(&out);
+
+	bool retval = false;
+	if (json_t::accept(ack.begin(), ack.end()))
+	{
+		json_t ackJson;
+		ackJson = json_t::parse(ack.begin(), ack.end());
+		if (ackJson.contains("status"))
+		{
+			retval = true;
+			outMsg->ptpStatus = ackJson["status"].get<std::string>();
+		}
+		if (ackJson.contains("sync_source"))
+		{
+			retval = true;
+			outMsg->ptpSource = ackJson["sync_source"].get<std::string>();
+		}
+		if (ackJson.contains("time_delay_offset_nsec"))
+		{
+			retval = true;
+			outMsg->timeOffsetNsec = ackJson["time_delay_offset_nsec"].get<int>();
 		}
 	}
 

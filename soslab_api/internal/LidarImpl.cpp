@@ -1079,6 +1079,32 @@ bool soslab::LidarImpl::setAreaSelection(uint8_t compareNum, const uint8_t areaI
 }
 
 /* ************** */
+/* MLU interfaces */
+/* ************** */
+
+bool soslab::LidarImpl::getPTPStatus(std::string& status, std::string& ptpSource, uint64_t& timeOffsetNsec)
+{
+	if (!runtime_ || !sensorInterface) return false;
+
+	Request req;
+	req.feature = Feature::PTPStatus;
+	req.mode = SetMode::Set;
+
+	soslab::Message::GeneralMessage<uint8_t> msg;
+
+	soslab::Message::MLU::PTPStatusMessage outMsg;
+
+	bool retval = sendRequest(req, msg, outMsg, 20000);
+
+	status = outMsg.ptpStatus;
+	ptpSource = outMsg.ptpSource;
+	timeOffsetNsec = outMsg.timeOffsetNsec;
+	
+
+	return retval;
+}
+
+/* ************** */
 /* SLU interfaces */
 /* ************** */
 
