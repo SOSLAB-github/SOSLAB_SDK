@@ -122,6 +122,37 @@ cd src/ml/launch
 ros2 launch ml_viz.py
 ```
 
+### 3) Example launch configuration
+
+Before running the ROS example, set the LiDAR model in the launch file.
+
+- ROS1 uses the `lidar_type` parameter.
+- ROS2 uses the `lidarType` parameter.
+- Supported values are: `MLX`, `MLA`, `MLU`, `GL5`, `GL3`.
+
+This parameter selects which SOSLAB sensor implementation the example node will create and use.
+For example:
+
+- `lidar_type="MLU"` selects the ML-U sensor.
+- `lidar_type="GL5"` selects the GL-5 sensor.
+
+Make sure the parameter value matches the physically connected sensor.
+The value is case-sensitive and should be written exactly as shown above.
+
+#### ROS1 example
+
+```xml
+<param name="lidar_type" value="MLU" type="string"/>
+```
+
+#### ROS2 example
+
+```python
+{'lidarType': 'MLU'}
+```
+
+If the configured LiDAR type does not match the connected device, streaming or packet parsing may fail.
+
 ## License
 
 This SDK is distributed under the terms in `LICENSE`. Third-party components used within the SDK (Asio, nlohmann/json) are subject to their respective licenses; see `LICENSE` for details.
