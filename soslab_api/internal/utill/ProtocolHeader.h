@@ -82,8 +82,8 @@ namespace soslab
 		{
 			char header[8];
 			uint16_t frame_id;
-			uint64_t status;
 			uint64_t timestamp;
+			uint64_t status;
 			uint8_t type;
 			uint8_t hroll;
 			uint8_t vroll;
