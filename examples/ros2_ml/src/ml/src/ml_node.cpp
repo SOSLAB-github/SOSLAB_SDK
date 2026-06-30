@@ -159,7 +159,7 @@ private:
       return;
     }
 
-    const int id = 0;
+    const int id = static_cast<int>(scene->lidarId);
 
     auto msg = build_pointcloud(scene);
 

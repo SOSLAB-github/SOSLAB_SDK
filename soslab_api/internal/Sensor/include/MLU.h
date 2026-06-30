@@ -20,16 +20,19 @@ namespace soslab
 	protected:
 		virtual packetStatus classifyPacket(const std::vector<uint8_t>& pkt) const override;
 		virtual bool parseStreamData(const std::vector<uint8_t>& packetData) override;
-		bool buildStreamData(const std::vector<uint8_t>& packetData);
 
 		//Create Protocol
 		std::vector<std::vector<uint8_t>> createBooleanMessage(std::string key, const soslab::MessageBase& dtn);
+		std::vector<std::vector<uint8_t>> createRequestMessage(std::string key, const Request& req);
 
 		//Parser Protocol
 		bool validateJsonAck(const std::vector<uint8_t>& ack, soslab::MessageBase& out);
+		bool validatePTPStatusMessageAck(const std::vector<uint8_t>& ack, soslab::MessageBase& out);
 
 	private:
 		std::vector<FrameData> frameDataVec;
+
+		bool buildStreamData(const std::vector<uint8_t>& packetData);
 
 		//MLU Parameter
 		int numCol = 256;

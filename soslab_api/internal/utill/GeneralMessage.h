@@ -140,6 +140,16 @@ namespace soslab
 				std::vector<uint32_t> maxLut;
 			};
 		}
+
+		namespace MLU
+		{
+			struct PTPStatusMessage : public MessageBase
+			{
+				std::string ptpStatus;
+				std::string ptpSource;
+				uint64_t timeOffsetNsec;
+			};
+		}
 	}
 }
 #endif

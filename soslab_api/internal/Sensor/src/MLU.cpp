@@ -44,6 +44,7 @@ bool soslab::MLU::supports(Feature f) const
 	switch (f)
 	{
 	case Feature::StreamEnable:
+	case Feature::PTPStatus:
 		return true;
 	default:
 		std::cerr << "Selected feature is not supported in MLU.\n";
@@ -62,6 +63,7 @@ bool soslab::MLU::buildCommand(const Request& req, soslab::MessageBase& msg, std
 	switch (req.feature)
 	{
 	case Feature::StreamEnable:		totalProtocol = createBooleanMessage("command", msg); break;
+	case Feature::PTPStatus:		totalProtocol = createRequestMessage("command", req); break;
 	default:						std::cerr << "Wrong feature to build MLU command.\n"; return false;
 
 	}
@@ -75,6 +77,7 @@ bool soslab::MLU::parseCommand(const Request& req, const std::vector<uint8_t>& p
 	switch (req.feature)
 	{
 	case Feature::StreamEnable:		retval = validateJsonAck(pkt, out); break;
+	case Feature::PTPStatus:		retval = validatePTPStatusMessageAck(pkt, out); break;
 	default:				std::cerr << "Wrong feature to build MLU command.\n"; return false;
 	}
 
@@ -84,10 +87,10 @@ bool soslab::MLU::parseCommand(const Request& req, const std::vector<uint8_t>& p
 
 soslab::packetStatus soslab::MLU::classifyPacket(const std::vector<uint8_t>& pkt) const
 {
-	if (pkt.size() < sizeof(header::headerMLU)) return packetStatus::INVALID;
+	if (pkt.size() < sizeof(header::headerMLUv10)) return packetStatus::INVALID;
 
-	header::headerMLU h{};
-	std::memcpy(&h, pkt.data(), sizeof(header::headerMLU));
+	header::headerMLUv10 h{};
+	std::memcpy(&h, pkt.data(), sizeof(header::headerMLUv10));
 
 	if (memcmp(h.header, "MUUSR", 5) == 0)
 		return packetStatus::STREAM;
@@ -104,6 +107,25 @@ std::vector<std::vector<uint8_t>> soslab::MLU::createBooleanMessage(std::string 
 	json_t payload;
 
 	payload[key] = (boolMsg.data) ? "run" : "stop";
+	std::string jsonStr = payload.dump();
+
+	cmd.assign(jsonStr.begin(), jsonStr.end());
+	totalCmd.push_back(cmd);
+	return totalCmd;
+}
+
+std::vector<std::vector<uint8_t>> soslab::MLU::createRequestMessage(std::string key, const soslab::Request& req)
+{
+	std::vector<std::vector<uint8_t>> totalCmd;
+	std::vector<uint8_t> cmd;
+
+	json_t payload;
+
+	switch (req.feature)
+	{
+		case Feature::PTPStatus: payload[key] = "read_ptp_sts"; break;
+	}
+
 	std::string jsonStr = payload.dump();
 
 	cmd.assign(jsonStr.begin(), jsonStr.end());
@@ -128,6 +150,35 @@ bool soslab::MLU::validateJsonAck(const std::vector<uint8_t>& ack, soslab::Messa
 	return retval;
 }
 
+bool soslab::MLU::validatePTPStatusMessageAck(const std::vector<uint8_t>& ack, soslab::MessageBase& out)
+{
+	soslab::Message::MLU::PTPStatusMessage* outMsg = static_cast<soslab::Message::MLU::PTPStatusMessage*>(&out);
+
+	bool retval = false;
+	if (json_t::accept(ack.begin(), ack.end()))
+	{
+		json_t ackJson;
+		ackJson = json_t::parse(ack.begin(), ack.end());
+		if (ackJson.contains("status"))
+		{
+			retval = true;
+			outMsg->ptpStatus = ackJson["status"].get<std::string>();
+		}
+		if (ackJson.contains("sync_source"))
+		{
+			retval = true;
+			outMsg->ptpSource = ackJson["sync_source"].get<std::string>();
+		}
+		if (ackJson.contains("time_delay_offset_nsec"))
+		{
+			retval = true;
+			outMsg->timeOffsetNsec = ackJson["time_delay_offset_nsec"].get<int>();
+		}
+	}
+
+	return retval;
+}
+
 bool soslab::MLU::parseStreamData(const std::vector<uint8_t>& packetData)
 {
 	return buildStreamData(packetData);
@@ -136,23 +187,37 @@ bool soslab::MLU::parseStreamData(const std::vector<uint8_t>& packetData)
 bool soslab::MLU::buildStreamData(const std::vector<uint8_t>& packetData)
 {
 	bool retval = false;
-	header::headerMLU headerInfo;
+	header::headerMLUv20 headerInfo;
 
 	int hroll = 0;
 	int vroll = 0;
 	int offset = 0;
-
-	memcpy(reinterpret_cast<char*>(&headerInfo), packetData.data(), sizeof(header::headerMLU));
-	offset += sizeof(header::headerMLU);
-
 	int numbering = 0;
+	uint64_t timestamp;
 
-	if (memcmp(headerInfo.header, "MUUSR", 5) == 0)
+	if (packetData.size() < sizeof(header::headerMLUv10)) return false;
+
+	memcpy(reinterpret_cast<char*>(&headerInfo), packetData.data(), sizeof(header::headerMLUv20));
+
+	if (headerInfo.header[5] == '1')
 	{
+		header::headerMLUv10 headerInfov10;
+		memcpy(reinterpret_cast<char*>(&headerInfov10), packetData.data(), sizeof(header::headerMLUv10));
+		offset += sizeof(header::headerMLUv10);
+		numbering = headerInfov10.header[7] - '0';
+
+		hroll = (headerInfov10.hroll_vroll) >> 6;
+		vroll = headerInfov10.hroll_vroll & 0x3F;
+		timestamp = headerInfov10.timestamp;
+	}
+	else if(headerInfo.header[5] == '2')
+	{
+		offset += sizeof(header::headerMLUv20);
 		numbering = headerInfo.header[7] - '0';
 
-		hroll = (headerInfo.hroll_vroll) >> 6;
-		vroll = headerInfo.hroll_vroll & 0x3F;
+		hroll = headerInfo.hroll;
+		vroll = headerInfo.vroll;
+		timestamp = headerInfo.timestamp;
 	}
 	else
 	{
@@ -161,7 +226,7 @@ bool soslab::MLU::buildStreamData(const std::vector<uint8_t>& packetData)
 
 	FrameData& frameData = frameDataVec[numbering];
 	frameData.lidarId = numbering;
-	frameData.timestamp[vroll] = headerInfo.timestamp;
+	frameData.timestamp[vroll] = timestamp;
 
 	for (int r = 0; r < numSegmentRow; r++)
 	{
