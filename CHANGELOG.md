@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.1.1] - 2026-10-15
+
+### Added
+- Add support for parsing MLX, MLA packet status into FrameData.
+
 ## [1.1.0] - 2026-06-30
 
 ### Added
