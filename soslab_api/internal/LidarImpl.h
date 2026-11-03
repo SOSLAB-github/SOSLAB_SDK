@@ -60,6 +60,7 @@ namespace soslab
 		void unregisterGetAreaCallBack();
 
 		lidarType getLidarType() const;
+		lidarParameters getParameters() const;
 
 		bool getScene(std::shared_ptr<soslab::FrameData>& scene) const;
 		bool getScene(std::shared_ptr<soslab::FrameData>& scene, int idx);

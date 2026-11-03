@@ -424,7 +424,12 @@ void soslab::LidarImpl::unregisterGetAreaCallBack()
 
 soslab::lidarType soslab::LidarImpl::getLidarType() const
 {
-	return lidarType::GL5;
+	return userParameter.lidarTypeValue;
+}
+
+soslab::lidarParameters soslab::LidarImpl::getParameters() const
+{
+	return userParameter;
 }
 
 bool soslab::LidarImpl::getScene(std::shared_ptr<soslab::FrameData>& scene) const

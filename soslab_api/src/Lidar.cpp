@@ -103,6 +103,16 @@ void soslab::Lidar::unregisterGetAreaCallBack()
 	impl_->unregisterGetAreaCallBack();
 }
 
+soslab::lidarType soslab::Lidar::getLidarType() const
+{
+	return impl_->getLidarType();
+}
+
+soslab::lidarParameters soslab::Lidar::getParameters() const
+{
+	return impl_->getParameters();
+}
+
 bool soslab::Lidar::getScene(std::shared_ptr<soslab::FrameData>& scene) const
 {
 	return impl_->getScene(scene);
