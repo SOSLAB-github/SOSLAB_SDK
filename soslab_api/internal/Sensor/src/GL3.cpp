@@ -587,7 +587,7 @@ bool soslab::GL3::parseAreaInfoAck(const std::vector<uint8_t>& ack, soslab::Mess
 
 bool soslab::GL3::parseEthernetInfoAck(const std::vector<uint8_t>& ack, soslab::MessageBase& out)
 {
-	soslab::Message::GL5::EthernetInfoMessage* ethernetInfoMsg = static_cast<soslab::Message::GL5::EthernetInfoMessage*>(&out);
+	soslab::Message::EthernetInfoMessage* ethernetInfoMsg = static_cast<soslab::Message::EthernetInfoMessage*>(&out);
 	if (ethernetInfoMsg == nullptr)
 	{
 		return false;
@@ -794,7 +794,7 @@ std::vector<uint8_t> soslab::GL3::EthernetInfo2Bytes(const soslab::MessageBase& 
 {
 	std::vector<uint8_t> bytes;
 
-	soslab::Message::GL5::EthernetInfoMessage ethernetInfoMsg = static_cast<const soslab::Message::GL5::EthernetInfoMessage&>(msg);
+	soslab::Message::EthernetInfoMessage ethernetInfoMsg = static_cast<const soslab::Message::EthernetInfoMessage&>(msg);
 
 	std::istringstream issPcIp(ethernetInfoMsg.pcIp);
 	std::string octet;

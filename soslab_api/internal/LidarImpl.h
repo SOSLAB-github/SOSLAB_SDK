@@ -13,6 +13,7 @@ TODO: LINSENSE INFORMATION
 #include "ringBuffer.h"
 #include "json.hpp"
 #include "GeneralMessage.h"
+#include "helperFunctions.h"
 
 #include <functional>
 #include <memory>

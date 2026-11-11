@@ -27,6 +27,8 @@ bool soslab::MLX::supports(Feature f) const
 	case Feature::SaveAreaLUT:
 	case Feature::GetAreaLUT:
 	case Feature::SelectArea:
+	case Feature::EthernetInfo:
+	case Feature::SaveSetting:
 		return true;
 	default:
 		std::cerr << "Selected feature is not supported in MLX.\n";
@@ -45,6 +47,8 @@ bool soslab::MLX::buildCommand(const Request& req, soslab::MessageBase& msg, std
 	switch (req.feature)
 	{
 	case Feature::StreamEnable:		totalProtocol = createBooleanMessage("command", msg);	break;
+	case Feature::EthernetInfo:		totalProtocol = req.mode == SetMode::Set ? createNetworkSettingMessage(msg) : createRequestMessage("command", req); break;
+	case Feature::SaveSetting:		totalProtocol = createJsonMessage("command", msg);	break;
 		//Area
 	case Feature::SetAreaLUT:		totalProtocol = createSetAreaInfo(msg);					break;
 	case Feature::GetAreaLUT:		totalProtocol = createGetAreaInfo(msg);					break;
@@ -65,6 +69,8 @@ bool soslab::MLX::parseCommand(const Request& req, const std::vector<uint8_t>& p
 	{
 		// cat
 	case Feature::StreamEnable:		retval = validateJsonAck(pkt, out);			break;
+	case Feature::EthernetInfo:		retval = req.mode == SetMode::Set ? validateJsonAck(pkt, out) : validateEthernetInfoJson(pkt, out); break;
+	case Feature::SaveSetting:		retval = validateJsonAck(pkt, out);			break;
 		//Area
 	case Feature::SetAreaLUT:		retval = validateSetAreaAck(pkt, out);		break;
 	case Feature::GetAreaLUT:		retval = validateGetAreaAck(pkt, out);		break;
@@ -334,6 +340,25 @@ std::vector<std::vector<uint8_t>> soslab::MLX::createAreaSelection(const soslab:
 	return totalCmd;
 }
 
+std::vector<std::vector<uint8_t>> soslab::MLX::createRequestMessage(std::string key, const soslab::Request& req)
+{
+	std::vector<std::vector<uint8_t>> totalCmd;
+	std::vector<uint8_t> cmd;
+
+	json_t payload;
+
+	switch (req.feature)
+	{
+	case Feature::EthernetInfo: payload[key] = "read_ip"; break;
+	}
+
+	std::string jsonStr = payload.dump();
+
+	cmd.assign(jsonStr.begin(), jsonStr.end());
+	totalCmd.push_back(cmd);
+	return totalCmd;
+}
+
 bool soslab::MLX::validateJsonAck(const std::vector<uint8_t>& ack, soslab::MessageBase& out)
 {
 	bool retval = false;
@@ -583,6 +608,79 @@ bool soslab::MLX::validateAreaSelection(const std::vector<uint8_t>& packet, sosl
 	}
 
 	return true;
+}
+
+bool soslab::MLX::validateEthernetInfoJson(const std::vector<uint8_t>& ack, soslab::MessageBase& out)
+{
+	soslab::Message::EthernetInfoMessage& msg = static_cast<soslab::Message::EthernetInfoMessage&>(out);
+
+	bool retval = true;
+	if (json_t::accept(ack.begin(), ack.end()))
+	{
+		json_t ackJson = json_t::parse(ack.begin(), ack.end());
+		if (ackJson.contains("ml_ip") && ackJson["ml_ip"].is_string()) msg.sensorIp = ackJson["ml_ip"].get<std::string>();
+		else retval = false;
+
+		if (ackJson.contains("ml_port") && ackJson["ml_port"].is_number_integer()) msg.sensorPort = ackJson["ml_port"].get<int>();
+		else retval = false;
+
+		if (ackJson.contains("pc_ip") && ackJson["pc_ip"].is_string()) msg.pcIp = ackJson["pc_ip"].get<std::string>();
+		else retval = false;
+
+		if (ackJson.contains("pc_port") && ackJson["pc_port"].is_number_integer()) msg.pcPort = ackJson["pc_port"].get<int>();
+		else retval = false;
+
+		if (ackJson.contains("netmask") && ackJson["netmask"].is_string()) msg.subnetMask = ackJson["netmask"].get<std::string>();
+		else retval = false;
+
+		if (ackJson.contains("gateway") && ackJson["gateway"].is_string()) msg.gatewayAddr = ackJson["gateway"].get<std::string>();
+		else retval = false;
+
+		if (ackJson.contains("mac") && ackJson["mac"].is_string()) msg.macAddr = ackJson["mac"].get<std::string>();
+		else retval = false;
+	}
+	else retval = false;
+
+	return retval;
+}
+
+std::vector<std::vector<uint8_t>> soslab::MLX::createJsonMessage(std::string key, const soslab::MessageBase& dtn)
+{
+	std::vector<std::vector<uint8_t>> totalCmd;
+	std::vector<uint8_t> cmd;
+	soslab::Message::GeneralMessage<std::string> msg = static_cast<const soslab::Message::GeneralMessage<std::string>&>(dtn);
+
+	json_t payload;
+
+	payload[key] = msg.data;
+	std::string jsonStr = payload.dump();
+
+	cmd.assign(jsonStr.begin(), jsonStr.end());
+	totalCmd.push_back(cmd);
+	return totalCmd;
+}
+
+std::vector<std::vector<uint8_t>> soslab::MLX::createNetworkSettingMessage(const soslab::MessageBase& dtn)
+{
+	std::vector<std::vector<uint8_t>> totalCmd;
+
+	const auto& msg = static_cast<const soslab::Message::EthernetInfoMessage&>(dtn);
+
+	json_t setting;
+	setting["gateway"] = msg.gatewayAddr;
+	setting["ml_ip"] = msg.sensorIp;
+	setting["ml_port"] = msg.sensorPort;
+	setting["netmask"] = msg.subnetMask;
+	setting["pc_ip"] = msg.pcIp;
+	setting["pc_port"] = msg.pcPort;
+
+	json_t payload;
+	payload["IP_Setting"] = setting;
+
+	std::string jsonStr = payload.dump();
+	std::vector<uint8_t> cmd(jsonStr.begin(), jsonStr.end());
+	totalCmd.push_back(cmd);
+	return totalCmd;
 }
 
 soslab::packetStatus soslab::MLX::classifyPacket(const std::vector<uint8_t>& pkt) const

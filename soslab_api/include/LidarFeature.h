@@ -68,6 +68,7 @@ namespace soslab
 		SelectArea,
 		// MLU
 		PTPStatus,
+		SaveSetting,
 		// SLU
 		Setting,
 		SDPSetting,

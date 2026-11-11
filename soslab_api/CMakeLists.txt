@@ -19,6 +19,7 @@ set(LIDAR_INTERNAL_SOURCES
 set(LIDAR_INTERNAL_HEADERS
     internal/LidarImpl.h
     ${UTILL_INCLUDE_DIR}/GeneralMessage.h
+    ${UTILL_INCLUDE_DIR}/helperFunctions.h
 )
 
 source_group("internal/Headers" FILES ${LIDAR_INTERNAL_HEADERS})
