@@ -871,6 +871,76 @@ bool soslab::LidarImpl::compareAllAreaWithSensor(std::vector<bool>& compareResul
 /* MLX interfaces */
 /* ************** */
 
+bool soslab::LidarImpl::setFps10Enable(bool enable)
+{
+	if (!runtime_ || !sensorInterface) return false;
+	if (!sensorInterface->supports(Feature::Fps10)) return false;
+
+	Request req;
+	req.feature = Feature::Fps10;
+
+	soslab::Message::GeneralMessage<bool> msg;
+	msg.data = enable;
+
+	return sendRequest(req, msg, 5000);
+}
+
+bool soslab::LidarImpl::setAmbientEnable(bool enable)
+{
+	if (!runtime_ || !sensorInterface) return false;
+	if (!sensorInterface->supports(Feature::AmbientEnable)) return false;
+
+	Request req;
+	req.feature = Feature::AmbientEnable;
+
+	soslab::Message::GeneralMessage<bool> msg;
+	msg.data = enable;
+
+	return sendRequest(req, msg, 5000);
+}
+
+bool soslab::LidarImpl::setDepthEnable(bool enable)
+{
+	if (!runtime_ || !sensorInterface) return false;
+	if (!sensorInterface->supports(Feature::DepthEnable)) return false;
+
+	Request req;
+	req.feature = Feature::DepthEnable;
+
+	soslab::Message::GeneralMessage<bool> msg;
+	msg.data = enable;
+
+	return sendRequest(req, msg, 5000);
+}
+
+bool soslab::LidarImpl::setIntensityEnable(bool enable)
+{
+	if (!runtime_ || !sensorInterface) return false;
+	if (!sensorInterface->supports(Feature::IntensityEnable)) return false;
+
+	Request req;
+	req.feature = Feature::IntensityEnable;
+
+	soslab::Message::GeneralMessage<bool> msg;
+	msg.data = enable;
+
+	return sendRequest(req, msg, 5000);
+}
+
+bool soslab::LidarImpl::setMultiEchoEnable(bool enable)
+{
+	if (!runtime_ || !sensorInterface) return false;
+	if (!sensorInterface->supports(Feature::MultiEchoEnable)) return false;
+
+	Request req;
+	req.feature = Feature::MultiEchoEnable;
+
+	soslab::Message::GeneralMessage<bool> msg;
+	msg.data = enable;
+
+	return sendRequest(req, msg, 5000);
+}
+
 bool soslab::LidarImpl::getAlarm(soslab::AreaAlarmData& alarm)
 {
 	if (!runtime_ || !sensorInterface)

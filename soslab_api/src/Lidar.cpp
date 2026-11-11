@@ -196,6 +196,31 @@ bool soslab::Lidar::compareAllAreaWithSensor(std::vector<bool>& compareResults, 
 /* MLX interfaces */
 /* ************** */
 
+bool soslab::Lidar::setFps10Enable(bool enable)
+{
+	return impl_->setFps10Enable(enable);
+}
+
+bool soslab::Lidar::setAmbientEnable(bool enable)
+{
+	return impl_->setAmbientEnable(enable);
+}
+
+bool soslab::Lidar::setDepthEnable(bool enable)
+{
+	return impl_->setDepthEnable(enable);
+}
+
+bool soslab::Lidar::setIntensityEnable(bool enable)
+{
+	return impl_->setIntensityEnable(enable);
+}
+
+bool soslab::Lidar::setMultiEchoEnable(bool enable)
+{
+	return impl_->setMultiEchoEnable(enable);
+}
+
 bool soslab::Lidar::getAlarm(soslab::AreaAlarmData& alarm)
 {
 	return impl_->getAlarm(alarm);

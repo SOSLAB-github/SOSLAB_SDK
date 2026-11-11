@@ -9,6 +9,26 @@
 
 soslab::MLX::MLX()
 {
+	//Initizlier
+	frameData.rows = 56;
+	frameData.cols = 192;
+	frameData.status = 0;
+	frameData.echoNum = 1;
+	frameData.frameNum = 0;
+	frameData.lidarId = 0;
+
+	frameData.timestamp = std::vector<uint64_t>(frameData.rows, 0);
+	frameData.ambient = std::vector<uint32_t>(frameData.rows * frameData.cols * 3, 0);
+	frameData.intensity.resize(frameData.echoNum);
+	frameData.depth.resize(frameData.echoNum);
+	frameData.points.resize(frameData.echoNum);
+	for (int e = 0; e < frameData.echoNum; e++)
+	{
+		frameData.intensity[e] = std::vector<uint32_t>(frameData.rows * frameData.cols, 0);
+		frameData.depth[e] = std::vector<uint32_t>(frameData.rows * frameData.cols, 0);
+		frameData.points[e] = std::vector<Points>(frameData.rows * frameData.cols, Points());
+	}
+
 	std::cout << "MLX created." << std::endl;
 }
 
@@ -22,6 +42,11 @@ bool soslab::MLX::supports(Feature f) const
 	switch (f)
 	{
 	case Feature::StreamEnable:
+	case Feature::Fps10:
+	case Feature::AmbientEnable:
+	case Feature::DepthEnable:
+	case Feature::IntensityEnable:
+	case Feature::MultiEchoEnable:
 	case Feature::AreaAlarm:
 	case Feature::SetAreaLUT:
 	case Feature::SaveAreaLUT:
@@ -47,6 +72,12 @@ bool soslab::MLX::buildCommand(const Request& req, soslab::MessageBase& msg, std
 	switch (req.feature)
 	{
 	case Feature::StreamEnable:		totalProtocol = createBooleanMessage("command", msg);	break;
+		//Setting
+	case Feature::Fps10:			totalProtocol = createSettingMessage("PL_Reg", "frame_interval", msg);			break;
+	case Feature::AmbientEnable:	totalProtocol = createSettingMessage("PL_Reg", "packet_ambient_en", msg);		break;
+	case Feature::DepthEnable:		totalProtocol = createSettingMessage("PL_Reg", "packet_depth_en", msg);			break;
+	case Feature::IntensityEnable:	totalProtocol = createSettingMessage("PL_Reg", "packet_intensity_en", msg);		break;
+	case Feature::MultiEchoEnable:	totalProtocol = createSettingMessage("PL_Reg", "packet_multi_echo_en", msg);	break;
 	case Feature::EthernetInfo:		totalProtocol = req.mode == SetMode::Set ? createNetworkSettingMessage(msg) : createRequestMessage("command", req); break;
 	case Feature::SaveSetting:		totalProtocol = createJsonMessage("command", msg);	break;
 		//Area
@@ -67,11 +98,16 @@ bool soslab::MLX::parseCommand(const Request& req, const std::vector<uint8_t>& p
 	Feature feature = req.feature;
 	switch (feature)
 	{
-		// cat
 	case Feature::StreamEnable:		retval = validateJsonAck(pkt, out);			break;
+	// Setting
+	case Feature::Fps10:			retval = validateJsonAck(pkt, out);			break;
+	case Feature::AmbientEnable:	retval = validateJsonAck(pkt, out);			break;
+	case Feature::DepthEnable:		retval = validateJsonAck(pkt, out);			break;
+	case Feature::IntensityEnable:	retval = validateJsonAck(pkt, out);			break;
+	case Feature::MultiEchoEnable:	retval = validateJsonAck(pkt, out);			break;
 	case Feature::EthernetInfo:		retval = req.mode == SetMode::Set ? validateJsonAck(pkt, out) : validateEthernetInfoJson(pkt, out); break;
 	case Feature::SaveSetting:		retval = validateJsonAck(pkt, out);			break;
-		//Area
+	//Area
 	case Feature::SetAreaLUT:		retval = validateSetAreaAck(pkt, out);		break;
 	case Feature::GetAreaLUT:		retval = validateGetAreaAck(pkt, out);		break;
 	case Feature::SaveAreaLUT:		retval = validateSaveAreaInfo(pkt, out);	break;
@@ -94,6 +130,28 @@ std::vector<std::vector<uint8_t>> soslab::MLX::createBooleanMessage(std::string 
 	payload[key] = (boolMsg.data) ? "run" : "stop";
 	std::string jsonStr = payload.dump();
 
+	cmd.assign(jsonStr.begin(), jsonStr.end());
+	totalCmd.push_back(cmd);
+	return totalCmd;
+}
+
+std::vector<std::vector<uint8_t>> soslab::MLX::createSettingMessage(const std::string groupKey, std::string itemKey, const soslab::MessageBase& dtn)
+{
+	std::vector<std::vector<uint8_t>> totalCmd;
+	std::vector<uint8_t> cmd;
+	auto msg = static_cast<const soslab::Message::GeneralMessage<bool>&>(dtn);
+
+	json_t payload;
+	if (itemKey == "frame_interval")
+	{
+		payload[groupKey][itemKey] = msg.data ? 10 : 20;
+	}
+	else
+	{
+		payload[groupKey][itemKey] = msg.data ? 1 : 0;
+	}
+
+	std::string jsonStr = payload.dump();
 	cmd.assign(jsonStr.begin(), jsonStr.end());
 	totalCmd.push_back(cmd);
 	return totalCmd;
@@ -716,66 +774,114 @@ bool soslab::MLX::buildStreamData(const std::vector<uint8_t>& packetData)
 	header::headerMLX header;
 	memcpy(&header, packetData.data(), sizeof(header::headerMLX));
 
+	//Check Initializer
+	checkInitializer(header);
+
 	uint8_t row_number = header.row_number;
 	const uint8_t* dataPtr = packetData.data() + sizeof(header);
 
 	frameData.timestamp[row_number] = header.timestamp;
-	
-	if(row_number == 0) frameData.status = 0;
+
+	if (row_number == 0) frameData.status = 0;
 	frameData.status |= header.status;
 
 	size_t row_start_ambient = row_number * 576;
-	size_t row_start_data = row_number * 192;
+	size_t row_start_data = row_number * frameData.cols;
 
-	memcpy(&frameData.ambient[row_start_ambient], dataPtr, 576 * sizeof(uint32_t));
-	dataPtr += 576 * sizeof(uint32_t);
-
-	for (size_t i = 0; i < 192; i++)
+	if (!header.type.ambient_disable)
 	{
-		uint32_t depth = 0;
-		memcpy(&depth, dataPtr, sizeof(uint32_t));
-		frameData.depth[0][row_start_data + i] = depth;
-		dataPtr += sizeof(uint32_t);
+		memcpy(&frameData.ambient[row_start_ambient], dataPtr, 576 * sizeof(uint32_t));
+		dataPtr += 576 * sizeof(uint32_t);
+	}
 
-		uint16_t intensity = 0;
-		memcpy(&intensity, dataPtr, sizeof(uint16_t));
-		frameData.intensity[0][row_start_data + i] = intensity;
-		dataPtr += sizeof(uint16_t);
+	for (size_t i = 0; i < frameData.cols; i++)
+	{
+		for (int e = 0; e < frameData.echoNum; e++)
+		{
+			if (!header.type.depth_disable)
+			{
+				uint32_t depth = 0;
+				memcpy(&depth, dataPtr, sizeof(uint32_t));
+				frameData.depth[e][row_start_data + i] = depth;
+				dataPtr += sizeof(uint32_t);
+			}
 
-		// reserved
-		dataPtr += sizeof(uint16_t);
+			if (!header.type.intensity_disable)
+			{
+				uint16_t intensity = 0;
+				memcpy(&intensity, dataPtr, sizeof(uint16_t));
+				frameData.intensity[e][row_start_data + i] = intensity;
+				dataPtr += sizeof(uint16_t);
+				// reserved
+				dataPtr += sizeof(uint16_t);
+			}
 
-		uint64_t rawData = 0;
-		memcpy(&rawData, dataPtr, sizeof(uint64_t));
-		dataPtr += sizeof(uint64_t);
+			uint64_t rawData = 0;
+			memcpy(&rawData, dataPtr, sizeof(uint64_t));
+			dataPtr += sizeof(uint64_t);
 
-		Points point;
-		int32_t x_raw = rawData & 0x1FFFFF;
-		int32_t x = (x_raw & 0x100000) ? (x_raw | 0xFFE00000) : x_raw;
+			Points point;
+			int32_t x_raw = rawData & 0x1FFFFF;
+			int32_t x = (x_raw & 0x100000) ? (x_raw | 0xFFE00000) : x_raw;
 
-		int32_t y_raw = (rawData >> 21) & 0x1FFFFF;
-		int32_t y = (y_raw & 0x100000) ? (y_raw | 0xFFE00000) : y_raw;
+			int32_t y_raw = (rawData >> 21) & 0x1FFFFF;
+			int32_t y = (y_raw & 0x100000) ? (y_raw | 0xFFE00000) : y_raw;
 
-		int32_t z_raw = (rawData >> 42) & 0x1FFFFF;
-		int32_t z = (z_raw & 0x100000) ? (z_raw | 0xFFE00000) : z_raw;
+			int32_t z_raw = (rawData >> 42) & 0x1FFFFF;
+			int32_t z = (z_raw & 0x100000) ? (z_raw | 0xFFE00000) : z_raw;
 
-		point.x = static_cast<float>(x);
-		point.y = static_cast<float>(y);
-		point.z = static_cast<float>(z);
+			point.x = static_cast<float>(x);
+			point.y = static_cast<float>(y);
+			point.z = static_cast<float>(z);
 
-		frameData.points[0][row_start_data + i] = point;
+			frameData.points[e][row_start_data + i] = point;
+		}
 	}
 
 	if (row_number == 55)
 	{
-		frameData.rows = 56;
-		frameData.cols = 192;
-
 		if (frameBuffer != nullptr)
 		{
+			frameData.frameNum++;
 			frameBuffer->push(std::make_shared<FrameData>(frameData));
 		}
 	}
 
 	return true;
+}
+
+bool soslab::MLX::checkInitializer(const header::headerMLX& info)
+{
+	bool modeChange = false;
+
+	if (info.type.multi_echo)
+	{
+		if (frameData.echoNum != 2)
+		{
+			frameData.echoNum = 2;
+			modeChange = true;
+		}
+	}
+	else
+	{
+		if (frameData.echoNum != 1)
+		{
+			frameData.echoNum = 1;
+			modeChange = true;
+		}
+	}
+
+	if (modeChange)
+	{
+		frameData.intensity.resize(frameData.echoNum);
+		frameData.depth.resize(frameData.echoNum);
+		frameData.points.resize(frameData.echoNum);
+		for (int e = 0; e < frameData.echoNum; e++)
+		{
+			frameData.intensity[e] = std::vector<uint32_t>(frameData.rows * frameData.cols, 0);
+			frameData.depth[e] = std::vector<uint32_t>(frameData.rows * frameData.cols, 0);
+			frameData.points[e] = std::vector<Points>(frameData.rows * frameData.cols, Points());
+		}
+	}
+	return false;
 }

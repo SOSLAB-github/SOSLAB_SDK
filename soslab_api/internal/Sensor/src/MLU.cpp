@@ -23,6 +23,7 @@ soslab::MLU::MLU()
 	{
 		frameData.echoNum = 1;
 		frameData.lidarId = 0;
+		frameData.frameNum = 0;
 		frameData.timestamp.resize(32);
 		frameData.ambient.resize(numTotalSize);
 		frameData.depth[0].resize(numTotalSize);
@@ -307,6 +308,8 @@ bool soslab::MLU::buildStreamData(const std::vector<uint8_t>& packetData)
 	FrameData& frameData = frameDataVec[numbering];
 	frameData.lidarId = numbering;
 	frameData.timestamp[vroll] = timestamp;
+	
+	if(headerInfo.header[5] == '2')	frameData.status = headerInfo.status;
 
 	for (int r = 0; r < numSegmentRow; r++)
 	{
@@ -354,6 +357,7 @@ bool soslab::MLU::buildStreamData(const std::vector<uint8_t>& packetData)
 		{
 			frameData.rows = numRow;
 			frameData.cols = numCol;
+			frameData.frameNum++;
 			frameBuffer->push(std::make_shared<FrameData>(frameData));
 		}
 	}

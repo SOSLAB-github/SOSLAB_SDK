@@ -24,6 +24,7 @@ namespace soslab
 
 		//Create Protocol
 		std::vector<std::vector<uint8_t>> createBooleanMessage(std::string key, const soslab::MessageBase& dtn);
+		std::vector<std::vector<uint8_t>> createSettingMessage(const std::string groupKey, std::string itemKey, const soslab::MessageBase& dtn);
 		std::vector<std::vector<uint8_t>> createSetAreaInfo(const soslab::MessageBase& dtn);
 		std::vector<std::vector<uint8_t>> createGetAreaInfo(const soslab::MessageBase& dtn);
 		std::vector<std::vector<uint8_t>> createSaveAreaInfo();
@@ -42,6 +43,8 @@ namespace soslab
 
 	private:
 		FrameData frameData;
+
+		bool checkInitializer(const header::headerMLX& info);
 	};
 
 }

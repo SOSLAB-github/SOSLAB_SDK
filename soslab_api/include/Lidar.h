@@ -105,6 +105,12 @@ namespace soslab
 		/* ************** */
 		/* MLX interfaces */
 		/* ************** */
+		bool setFps10Enable(bool enable);
+		bool setAmbientEnable(bool enable);
+		bool setDepthEnable(bool enable);
+		bool setIntensityEnable(bool enable);
+		bool setMultiEchoEnable(bool enable);
+
 		bool getAlarm(soslab::AreaAlarmData& alarm);
 		bool setAreaLUT(uint8_t areaIndex, const soslab::area::Area& area, const std::vector<uint32_t>& minLut, const std::vector<uint32_t>& maxLut);
 		bool saveAreaLUTToFlash();
