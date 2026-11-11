@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.2.0] - 2026-11-12
+
+### Added
+- Add `Lidar::getParameters()`
+- Add PCAPNG file reading and ML-A packet detection in FileIO.
+- Add `Lidar::getEthernetInfo()` / `setEthernetInfo()` support for ML-X, ML-A and ML-U.
+- Add mode control APIs for ML-X and ML-A: `setFps10Enable`, `setAmbientEnable`, `setDepthEnable`, `setIntensityEnable`, `setMultiEchoEnable`.
+- ML-X / ML-A `FrameData` follows the sensor mode: multi-echo (2 echoes) and ambient / depth / intensity disable.
+- Add `FrameData::frameNum` counting for ML-X, ML-A and ML-U.
+- Add support for parsing ML-U packet status (v2 header) into `FrameData`.
+
+### Changed
+- `soslab::Feature` enum values changed.
+
+### Fixed
+- Fix crash of ROS 2 Foxy nodes caused by bundled Asio symbols exported from the Linux shared library. Only `soslab::Lidar` symbols are exported.
+- Fix ROS 2 example build on Foxy (C++14).
+- Fix `getLidarType()` always returning GL5.
+- Fix ML-A `type()` returning ML-X.
+- Fix ML-A ambient buffer overflow.
+
 ## [1.1.1] - 2026-10-15
 
 ### Added
