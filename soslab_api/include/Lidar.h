@@ -79,7 +79,8 @@ namespace soslab
 		void registerGetAreaCallBack(AreaDataCallback cb);
 		void unregisterGetAreaCallBack();
 
-		lidarType getLidarType() const { return userParameter.lidarTypeValue; }
+		lidarType getLidarType() const;
+		lidarParameters getParameters() const;
 
 		bool getScene(std::shared_ptr<soslab::FrameData>& scene) const;
 		bool getScene(std::shared_ptr<soslab::FrameData>& scene, int idx);
@@ -104,6 +105,12 @@ namespace soslab
 		/* ************** */
 		/* MLX interfaces */
 		/* ************** */
+		bool setFps10Enable(bool enable);
+		bool setAmbientEnable(bool enable);
+		bool setDepthEnable(bool enable);
+		bool setIntensityEnable(bool enable);
+		bool setMultiEchoEnable(bool enable);
+
 		bool getAlarm(soslab::AreaAlarmData& alarm);
 		bool setAreaLUT(uint8_t areaIndex, const soslab::area::Area& area, const std::vector<uint32_t>& minLut, const std::vector<uint32_t>& maxLut);
 		bool saveAreaLUTToFlash();
@@ -120,8 +127,6 @@ namespace soslab
 
 	private:
 		void initializer();
-
-		lidarParameters userParameter;
 
 		LidarDataCallback dataCallback;
 		AreaDataCallback areaCallback;

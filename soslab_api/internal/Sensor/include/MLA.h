@@ -11,7 +11,7 @@ namespace soslab
 		MLA();
 		~MLA();
 
-		virtual lidarType type() const override { return lidarType::MLX; }
+		virtual lidarType type() const override { return lidarType::MLA; }
 		virtual bool supports(Feature f) const override;
 
 		virtual bool buildCommand(const Request& req, soslab::MessageBase& msg, std::vector<std::vector<uint8_t>>& totalProtocol) override;
@@ -24,13 +24,19 @@ namespace soslab
 
 		//Create Protocol
 		std::vector<std::vector<uint8_t>> createBooleanMessage(std::string key, const soslab::MessageBase& dtn);
-
+		std::vector<std::vector<uint8_t>> createSettingMessage(const std::string groupKey, std::string itemKey, const soslab::MessageBase& dtn);
+		std::vector<std::vector<uint8_t>> createJsonMessage(std::string key, const soslab::MessageBase& dtn);
+		std::vector<std::vector<uint8_t>> createNetworkSettingMessage(const soslab::MessageBase& dtn);
+		std::vector<std::vector<uint8_t>> createRequestMessage(std::string key, const soslab::Request& req);
 
 		//Parser Protocol
 		bool validateJsonAck(const std::vector<uint8_t>& ack, soslab::MessageBase& out);
+		bool validateEthernetInfoJson(const std::vector<uint8_t>& ack, soslab::MessageBase& out);
 
 	private:
 		std::vector<FrameData> frameDataVec;
+		
+		bool checkInitializer(const header::headerMLX& info, FrameData& frameData);
 	};
 
 }

@@ -38,7 +38,7 @@ static inline uint32_t intensity_to_rgb(uint32_t inten, int max_intensity)
 {
   if (max_intensity <= 0) max_intensity = 3000;
   int v = static_cast<int>( (static_cast<double>(inten) * 255.0) / static_cast<double>(max_intensity) );
-  v = std::clamp(v, 0, 255);
+  v = std::min(std::max(v, 0), 255);
 
   const uint32_t r = static_cast<uint32_t>(soslab_r[v]);
   const uint32_t g = static_cast<uint32_t>(soslab_g[v]);

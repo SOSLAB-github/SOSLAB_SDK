@@ -61,6 +61,11 @@ namespace soslab
 		AreaDataCompare,
 
 		// MLX
+		Fps10,
+		AmbientEnable,
+		DepthEnable,
+		IntensityEnable,
+		MultiEchoEnable,
 		AreaAlarm,
 		SetAreaLUT,
 		SaveAreaLUT,
@@ -68,6 +73,7 @@ namespace soslab
 		SelectArea,
 		// MLU
 		PTPStatus,
+		SaveSetting,
 		// SLU
 		Setting,
 		SDPSetting,

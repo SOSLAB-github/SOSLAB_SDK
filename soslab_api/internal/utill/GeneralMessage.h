@@ -50,6 +50,17 @@ namespace soslab
 			T data{};
 		};
 
+		struct EthernetInfoMessage : public MessageBase
+		{
+			std::string sensorIp;
+			int sensorPort;
+			std::string pcIp;
+			int pcPort;
+			std::string subnetMask;
+			std::string gatewayAddr;
+			std::string macAddr;
+		};
+
 		namespace GL3
 		{
 
@@ -66,17 +77,6 @@ namespace soslab
 			{
 				uint8_t inputArea;
 				uint8_t outputLevel;
-			};
-
-			struct EthernetInfoMessage : public MessageBase
-			{
-				std::string sensorIp;
-				int sensorPort;
-				std::string pcIp;
-				int pcPort;
-				std::string subnetMask;
-				std::string gatewayAddr;
-				std::string macAddr;
 			};
 
 			struct FWVersionMessage : public MessageBase

@@ -37,6 +37,23 @@ typedef struct pcap_pkthdr
 	uint32_t len;	/* length this packet (off wire) */
 }PCAP_HDR;
 
+/* Pcapng Block Header */
+typedef struct pcapng_block_header
+{
+	uint32_t blockType;
+	uint32_t blockTotalLength;
+}PCAPNG_BLOCK_HDR;
+
+/* Pcapng Enhanced Packet Block Header */
+typedef struct pcapng_epb_header
+{
+	uint32_t interfaceId;
+	uint32_t timestampHigh;
+	uint32_t timestampLow;
+	uint32_t capturedLen;
+	uint32_t packetLen;
+}PCAPNG_EPB_HDR;
+
 /* Ethernet header */
 typedef struct ethernet_header
 {
@@ -123,6 +140,8 @@ namespace soslab
 		std::shared_ptr<soslab::RingBuffer<std::vector<uint8_t>>> rawBuffer;
 
 		bool getPayloadfromPCAP(std::vector<uint8_t>& payload, int64_t& recordStartPos);
+		bool getPayloadfromPCAPNG(std::vector<uint8_t>& payload, int64_t& recordStartPos);
+		bool getPayloadfromPacketData(const std::vector<uint8_t>& packetData, std::vector<uint8_t>& payload, int64_t packetStartPos, int64_t& recordStartPos);
 
 		bool readHeader(logHeader& header);
 

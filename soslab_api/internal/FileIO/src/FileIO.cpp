@@ -1,5 +1,7 @@
 #include "FileIO.h"
 #include "ProtocolHeader.h"
+#include <algorithm>
+#include <cctype>
 #include <cstring>
 
 soslab::FileIO::FileIO(const std::string& path, FileMode mode)
@@ -22,7 +24,8 @@ bool soslab::FileIO::open()
 	std::ios::openmode openMode = std::ios::binary;
 
 	std::size_t found = filePath.find_last_of(".");
-	std::string extension = filePath.substr(found + 1);
+	std::string extension = (found == std::string::npos) ? "" : filePath.substr(found + 1);
+	std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
 	std::cerr << filePath << "\n";
 
@@ -33,6 +36,10 @@ bool soslab::FileIO::open()
 		if (extension == "pcap")
 		{
 			extenstionType = 1;
+		}
+		else if (extension == "pcapng")
+		{
+			extenstionType = 2;
 		}
 		else if (extension == "bin")
 		{
@@ -46,7 +53,10 @@ bool soslab::FileIO::open()
 
 		fs.open(filePath.c_str(), std::ios::in | openMode);
 
-		preprocessFile();
+		if (!fs.is_open() || !preprocessFile())
+		{
+			retval = false;
+		}
 
 		break;
 
@@ -131,12 +141,14 @@ bool soslab::FileIO::preprocessFile()
 	std::vector<uint8_t> readData;
 
 	int64_t currentPos;
+	int64_t segmentStartPos = -1;
 
 	while (fs.good())
 	{
 		switch (extenstionType)
 		{
 		case 0:
+		{
 			//bin
 			currentPos = fs.tellg();
 			logHeader header;
@@ -149,14 +161,45 @@ bool soslab::FileIO::preprocessFile()
 			fs.read(reinterpret_cast<char*>(readData.data()), header.size);
 
 			break;
+		}
 		case 1:
-			currentPos = fs.tellg();
-			if (!getPayloadfromPCAP(readData, currentPos))
+		{
+			const int64_t packetPos = fs.tellg();
+
+			if (segmentStartPos < 0)
+			{
+				segmentStartPos = packetPos;
+			}
+
+			if (!getPayloadfromPCAP(readData, segmentStartPos))
 			{
 				//Need More Reassemble
 				continue;
 			}
+
+			currentPos = segmentStartPos;
+			segmentStartPos = -1;
 			break;
+		}
+		case 2:
+		{
+			const int64_t blockPos = fs.tellg();
+
+			if (segmentStartPos < 0)
+			{
+				segmentStartPos = blockPos;
+			}
+
+			if (!getPayloadfromPCAPNG(readData, segmentStartPos))
+			{
+				//Need More Reassemble
+				continue;
+			}
+
+			currentPos = segmentStartPos;
+			segmentStartPos = -1;
+			break;
+		}
 		}
 
 
@@ -165,6 +208,20 @@ bool soslab::FileIO::preprocessFile()
 			if (detectedLidarType == soslab::lidarType::UNKNOWN)
 			{
 				detectedLidarType = soslab::lidarType::MLX;
+			}
+			header::headerMLX packet;
+			memcpy(&packet, readData.data(), sizeof(header::headerMLX));
+
+			if (packet.row_number == 0)
+			{
+				frameIdx.push_back(currentPos);
+			}
+		}
+		else if (memcmp(readData.data(), "LIDARPK", 7) == 0)
+		{
+			if (detectedLidarType == soslab::lidarType::UNKNOWN)
+			{
+				detectedLidarType = soslab::lidarType::MLA;
 			}
 			header::headerMLX packet;
 			memcpy(&packet, readData.data(), sizeof(header::headerMLX));
@@ -248,6 +305,7 @@ bool soslab::FileIO::readFrame(size_t frameIndex)
 		switch (extenstionType)
 		{
 		case 0:
+		{
 			//bin
 			currentPos = fs.tellg();
 			logHeader header;
@@ -260,13 +318,25 @@ bool soslab::FileIO::readFrame(size_t frameIndex)
 			fs.read(reinterpret_cast<char*>(readData.data()), header.size);
 
 			break;
+		}
 		case 1:
+		{
 			if (!getPayloadfromPCAP(readData, currentPos))
 			{
 				//Need More Reassemble
 				continue;
 			}
 			break;
+		}
+		case 2:
+		{
+			if (!getPayloadfromPCAPNG(readData, currentPos))
+			{
+				//Need More Reassemble
+				continue;
+			}
+			break;
+		}
 		}
 
 		if (rawBuffer != nullptr)
@@ -335,33 +405,141 @@ void soslab::FileIO::messageWriter()
 
 bool soslab::FileIO::getPayloadfromPCAP(std::vector<uint8_t>& payload, int64_t& recordStartPos)
 {
-	const uint64_t localPos = static_cast<uint64_t>(fs.tellg());
+	const int64_t localPos = static_cast<int64_t>(fs.tellg());
 
+	PCAP_HDR pcapHeader;
+
+	if (!fs.read(reinterpret_cast<char*>(&pcapHeader), sizeof(pcap_pkthdr)))
+	{
+		return false;
+	}
+
+	if (pcapHeader.caplen == 0)
+	{
+		return false;
+	}
+
+	std::vector<uint8_t> temp(pcapHeader.caplen);
+	if (!fs.read(reinterpret_cast<char*>(temp.data()), pcapHeader.caplen))
+	{
+		return false;
+	}
+
+	return getPayloadfromPacketData(temp, payload, localPos, recordStartPos);
+}
+
+bool soslab::FileIO::getPayloadfromPCAPNG(std::vector<uint8_t>& payload, int64_t& recordStartPos)
+{
+	const int64_t localPos = static_cast<int64_t>(fs.tellg());
+	if (localPos < 0)
+	{
+		return false;
+	}
+
+	constexpr uint32_t enhancedPacketBlock = 0x00000006;
+	constexpr uint32_t simplePacketBlock = 0x00000003;
+
+	PCAPNG_BLOCK_HDR blockHeader;
+	if (!fs.read(reinterpret_cast<char*>(&blockHeader), sizeof(PCAPNG_BLOCK_HDR)))
+	{
+		return false;
+	}
+
+	if (blockHeader.blockTotalLength < sizeof(PCAPNG_BLOCK_HDR) + sizeof(uint32_t))
+	{
+		fs.setstate(std::ios::failbit);
+		return false;
+	}
+
+	const int64_t nextBlockPos = localPos + static_cast<int64_t>(blockHeader.blockTotalLength);
+
+	if (blockHeader.blockType == enhancedPacketBlock)
+	{
+		if (blockHeader.blockTotalLength < sizeof(PCAPNG_BLOCK_HDR) + sizeof(PCAPNG_EPB_HDR) + sizeof(uint32_t))
+		{
+			fs.seekg(nextBlockPos, std::ios::beg);
+			return false;
+		}
+
+		PCAPNG_EPB_HDR epbHeader;
+		if (!fs.read(reinterpret_cast<char*>(&epbHeader), sizeof(PCAPNG_EPB_HDR)))
+		{
+			return false;
+		}
+
+		const uint32_t minBlockLength = static_cast<uint32_t>(sizeof(PCAPNG_BLOCK_HDR) + sizeof(PCAPNG_EPB_HDR) + sizeof(uint32_t));
+		if (epbHeader.capturedLen == 0 || epbHeader.capturedLen > blockHeader.blockTotalLength - minBlockLength)
+		{
+			fs.seekg(nextBlockPos, std::ios::beg);
+			return false;
+		}
+
+		std::vector<uint8_t> temp(epbHeader.capturedLen);
+		if (!fs.read(reinterpret_cast<char*>(temp.data()), epbHeader.capturedLen))
+		{
+			return false;
+		}
+
+		fs.seekg(nextBlockPos, std::ios::beg);
+		return getPayloadfromPacketData(temp, payload, localPos, recordStartPos);
+	}
+
+	if (blockHeader.blockType == simplePacketBlock)
+	{
+		if (blockHeader.blockTotalLength < sizeof(PCAPNG_BLOCK_HDR) + sizeof(uint32_t) + sizeof(uint32_t))
+		{
+			fs.seekg(nextBlockPos, std::ios::beg);
+			return false;
+		}
+
+		uint32_t packetLen = 0;
+		if (!fs.read(reinterpret_cast<char*>(&packetLen), sizeof(packetLen)))
+		{
+			return false;
+		}
+
+		const uint32_t blockPayloadSize = blockHeader.blockTotalLength - static_cast<uint32_t>(sizeof(PCAPNG_BLOCK_HDR) + sizeof(uint32_t) + sizeof(uint32_t));
+		const uint32_t capturedLen = std::min(packetLen, blockPayloadSize);
+		if (capturedLen == 0)
+		{
+			fs.seekg(nextBlockPos, std::ios::beg);
+			return false;
+		}
+
+		std::vector<uint8_t> temp(capturedLen);
+		if (!fs.read(reinterpret_cast<char*>(temp.data()), capturedLen))
+		{
+			return false;
+		}
+
+		fs.seekg(nextBlockPos, std::ios::beg);
+		return getPayloadfromPacketData(temp, payload, localPos, recordStartPos);
+	}
+
+	fs.seekg(nextBlockPos, std::ios::beg);
+	return false;
+}
+
+bool soslab::FileIO::getPayloadfromPacketData(const std::vector<uint8_t>& packetData, std::vector<uint8_t>& payload, int64_t packetStartPos, int64_t& recordStartPos)
+{
 	bool retval = false;
 	bool fragment_flag = false;
-	PCAP_HDR pcapHeader;
-	std::vector<uint8_t> etherHeader;
+
+	const int ether_header_size = sizeof(ETHER_HDR);
+	const int ip_header_size = sizeof(IPV4_HDR);
+	const int udp_header_size = sizeof(UDP_HDR);
+
+	if (packetData.size() < static_cast<size_t>(ether_header_size + ip_header_size + udp_header_size))
+	{
+		return false;
+	}
+
 	std::vector<uint8_t> ipHeader;
 	std::vector<uint8_t> udpHeader;
 
-	fs.read(reinterpret_cast<char*>(&pcapHeader), sizeof(pcap_pkthdr));
-	std::vector<uint8_t> temp(pcapHeader.len);
-
-	if (pcapHeader.len == 0)
-	{
-		return retval;
-	}
-
-	fs.read(reinterpret_cast<char*>(temp.data()), pcapHeader.len);
-
-	int ether_header_size = sizeof(ETHER_HDR);
-	int ip_header_size = sizeof(IPV4_HDR);
-	int udp_header_size = sizeof(UDP_HDR);
-
-	etherHeader = std::vector<uint8_t>(temp.begin(), temp.begin() + ether_header_size);
-	ipHeader = std::vector<uint8_t>(temp.begin() + ether_header_size, temp.begin() + ether_header_size + ip_header_size);
-	udpHeader = std::vector<uint8_t>(temp.begin() + ether_header_size + ip_header_size, temp.begin() + +ether_header_size + ip_header_size + udp_header_size);
-	std::vector<uint8_t> udp_data = std::vector<uint8_t>(temp.begin() + ether_header_size + ip_header_size + udp_header_size, temp.end());
+	ipHeader = std::vector<uint8_t>(packetData.begin() + ether_header_size, packetData.begin() + ether_header_size + ip_header_size);
+	udpHeader = std::vector<uint8_t>(packetData.begin() + ether_header_size + ip_header_size, packetData.begin() + ether_header_size + ip_header_size + udp_header_size);
+	std::vector<uint8_t> udp_data = std::vector<uint8_t>(packetData.begin() + ether_header_size + ip_header_size + udp_header_size, packetData.end());
 
 	IPV4_HDR ipHeaderInfo;
 	UDP_HDR udpHeaderInfo;
@@ -389,9 +567,14 @@ bool soslab::FileIO::getPayloadfromPCAP(std::vector<uint8_t>& payload, int64_t& 
 
 		if (flag_fragment == 1 && offset_fragment == 0)
 		{
-			recordStartPos = localPos;
+			recordStartPos = packetStartPos;
 
 			fragment_flag = false;
+			payload.clear();
+		}
+		else if (offset_fragment == 0 && flag_fragment == 0 && dont_fragment == 0)
+		{
+			recordStartPos = packetStartPos;
 			payload.clear();
 		}
 
@@ -410,7 +593,7 @@ bool soslab::FileIO::getPayloadfromPCAP(std::vector<uint8_t>& payload, int64_t& 
 
 		if (dont_fragment == 1)
 		{
-			recordStartPos = localPos;
+			recordStartPos = packetStartPos;
 			payload.assign(udp_data.begin(), udp_data.end());
 			return true;
 		}
@@ -420,7 +603,7 @@ bool soslab::FileIO::getPayloadfromPCAP(std::vector<uint8_t>& payload, int64_t& 
 		}
 		else if (offset_fragment == 0 && flag_fragment == 0 && dont_fragment == 0)
 		{
-			payload.clear();
+			return true;
 		}
 
 		if (fragment_flag)

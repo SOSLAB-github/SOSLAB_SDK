@@ -54,8 +54,7 @@ namespace soslab
 				struct
 				{
 					uint8_t multi_echo : 1;
-					uint8_t rsvd : 3;
-					uint8_t depth_completion : 1;
+					uint8_t rsvd : 4;
 					uint8_t ambient_disable : 1;
 					uint8_t depth_disable : 1;
 					uint8_t intensity_disable : 1;

@@ -23,6 +23,7 @@ soslab::MLU::MLU()
 	{
 		frameData.echoNum = 1;
 		frameData.lidarId = 0;
+		frameData.frameNum = 0;
 		frameData.timestamp.resize(32);
 		frameData.ambient.resize(numTotalSize);
 		frameData.depth[0].resize(numTotalSize);
@@ -45,6 +46,8 @@ bool soslab::MLU::supports(Feature f) const
 	{
 	case Feature::StreamEnable:
 	case Feature::PTPStatus:
+	case Feature::EthernetInfo:
+	case Feature::SaveSetting:
 		return true;
 	default:
 		std::cerr << "Selected feature is not supported in MLU.\n";
@@ -64,6 +67,8 @@ bool soslab::MLU::buildCommand(const Request& req, soslab::MessageBase& msg, std
 	{
 	case Feature::StreamEnable:		totalProtocol = createBooleanMessage("command", msg); break;
 	case Feature::PTPStatus:		totalProtocol = createRequestMessage("command", req); break;
+	case Feature::SaveSetting:		totalProtocol = createJsonMessage("command", msg);	break;
+	case Feature::EthernetInfo:		totalProtocol = req.mode == SetMode::Set ? createNetworkSettingMessage(msg) : createRequestMessage("command", req); break;
 	default:						std::cerr << "Wrong feature to build MLU command.\n"; return false;
 
 	}
@@ -78,6 +83,8 @@ bool soslab::MLU::parseCommand(const Request& req, const std::vector<uint8_t>& p
 	{
 	case Feature::StreamEnable:		retval = validateJsonAck(pkt, out); break;
 	case Feature::PTPStatus:		retval = validatePTPStatusMessageAck(pkt, out); break;
+	case Feature::SaveSetting:		retval = validateJsonAck(pkt, out);	break;
+	case Feature::EthernetInfo:		retval = req.mode == SetMode::Set ? validateJsonAck(pkt, out) : validateEthernetInfoJson(pkt, out); break;
 	default:				std::cerr << "Wrong feature to build MLU command.\n"; return false;
 	}
 
@@ -123,12 +130,52 @@ std::vector<std::vector<uint8_t>> soslab::MLU::createRequestMessage(std::string 
 
 	switch (req.feature)
 	{
-		case Feature::PTPStatus: payload[key] = "read_ptp_sts"; break;
+		case Feature::PTPStatus:	payload[key] = "read_ptp_sts"; break;
+		case Feature::EthernetInfo: payload[key] = "read_ip"; break;
 	}
-
+	
 	std::string jsonStr = payload.dump();
 
 	cmd.assign(jsonStr.begin(), jsonStr.end());
+	totalCmd.push_back(cmd);
+	return totalCmd;
+}
+
+std::vector<std::vector<uint8_t>> soslab::MLU::createJsonMessage(std::string key, const soslab::MessageBase& dtn)
+{
+	std::vector<std::vector<uint8_t>> totalCmd;
+	std::vector<uint8_t> cmd;
+	soslab::Message::GeneralMessage<std::string> msg = static_cast<const soslab::Message::GeneralMessage<std::string>&>(dtn);
+
+	json_t payload;
+
+	payload[key] = msg.data;
+	std::string jsonStr = payload.dump();
+
+	cmd.assign(jsonStr.begin(), jsonStr.end());
+	totalCmd.push_back(cmd);
+	return totalCmd;
+}
+
+std::vector<std::vector<uint8_t>> soslab::MLU::createNetworkSettingMessage(const soslab::MessageBase& dtn)
+{
+	std::vector<std::vector<uint8_t>> totalCmd;
+
+	const auto& msg = static_cast<const soslab::Message::EthernetInfoMessage&>(dtn);
+
+	json_t setting;
+	setting["gateway"] = msg.gatewayAddr;
+	setting["ml_ip"] = msg.sensorIp;
+	setting["ml_port"] = msg.sensorPort;
+	setting["netmask"] = msg.subnetMask;
+	setting["pc_ip"] = msg.pcIp;
+	setting["pc_port"] = msg.pcPort;
+
+	json_t payload;
+	payload["IP_Setting"] = setting;
+
+	std::string jsonStr = payload.dump();
+	std::vector<uint8_t> cmd(jsonStr.begin(), jsonStr.end());
 	totalCmd.push_back(cmd);
 	return totalCmd;
 }
@@ -175,6 +222,40 @@ bool soslab::MLU::validatePTPStatusMessageAck(const std::vector<uint8_t>& ack, s
 			outMsg->timeOffsetNsec = ackJson["time_delay_offset_nsec"].get<int>();
 		}
 	}
+
+	return retval;
+}
+
+bool soslab::MLU::validateEthernetInfoJson(const std::vector<uint8_t>& ack, soslab::MessageBase& out)
+{
+	soslab::Message::EthernetInfoMessage& msg = static_cast<soslab::Message::EthernetInfoMessage&>(out);
+
+	bool retval = true;
+	if (json_t::accept(ack.begin(), ack.end()))
+	{
+		json_t ackJson = json_t::parse(ack.begin(), ack.end());
+		if (ackJson.contains("ml_ip") && ackJson["ml_ip"].is_string()) msg.sensorIp = ackJson["ml_ip"].get<std::string>();
+		else retval = false;
+
+		if (ackJson.contains("ml_port") && ackJson["ml_port"].is_number_integer()) msg.sensorPort = ackJson["ml_port"].get<int>();
+		else retval = false;
+
+		if (ackJson.contains("pc_ip") && ackJson["pc_ip"].is_string()) msg.pcIp = ackJson["pc_ip"].get<std::string>();
+		else retval = false;
+
+		if (ackJson.contains("pc_port") && ackJson["pc_port"].is_number_integer()) msg.pcPort = ackJson["pc_port"].get<int>();
+		else retval = false;
+
+		if (ackJson.contains("netmask") && ackJson["netmask"].is_string()) msg.subnetMask = ackJson["netmask"].get<std::string>();
+		else retval = false;
+
+		if (ackJson.contains("gateway") && ackJson["gateway"].is_string()) msg.gatewayAddr = ackJson["gateway"].get<std::string>();
+		else retval = false;
+
+		if (ackJson.contains("mac") && ackJson["mac"].is_string()) msg.macAddr = ackJson["mac"].get<std::string>();
+		else retval = false;
+	}
+	else retval = false;
 
 	return retval;
 }
@@ -227,6 +308,8 @@ bool soslab::MLU::buildStreamData(const std::vector<uint8_t>& packetData)
 	FrameData& frameData = frameDataVec[numbering];
 	frameData.lidarId = numbering;
 	frameData.timestamp[vroll] = timestamp;
+	
+	if(headerInfo.header[5] == '2')	frameData.status = headerInfo.status;
 
 	for (int r = 0; r < numSegmentRow; r++)
 	{
@@ -274,6 +357,7 @@ bool soslab::MLU::buildStreamData(const std::vector<uint8_t>& packetData)
 		{
 			frameData.rows = numRow;
 			frameData.cols = numCol;
+			frameData.frameNum++;
 			frameBuffer->push(std::make_shared<FrameData>(frameData));
 		}
 	}

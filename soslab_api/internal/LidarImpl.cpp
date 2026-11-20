@@ -8,162 +8,6 @@
 
 #include "LidarFeature.h"
 
-namespace soslab
-{
-	namespace utill
-	{
-		inline bool json_write_to_file(const char* name, const nlohmann::json& json_arg)
-		{
-			std::fstream text_write;
-			text_write.open(name, std::fstream::out | std::fstream::trunc);
-
-			if (!text_write.is_open())
-			{
-				return false;
-			}
-
-			bool array_check = false;
-
-			try
-			{
-				std::string json_dump = json_arg.dump();
-				std::vector<char> write_buffer;
-				write_buffer.reserve(json_dump.size() + 1000);
-
-				for (auto it = json_dump.begin(); it != json_dump.end(); ++it)
-				{
-					if ('[' == *it)
-					{
-						array_check = true;
-					}
-					else if (']' == *it)
-					{
-						array_check = false;
-					}
-
-					if ((('{' == *it) || (',' == *it)) && !array_check)
-					{
-						write_buffer.push_back(*it);
-						write_buffer.push_back('\n');
-						write_buffer.push_back(' ');
-						write_buffer.push_back(' ');
-						write_buffer.push_back(' ');
-					}
-					else if ('}' == *it && !array_check)
-					{
-						write_buffer.push_back('\n');
-						write_buffer.push_back(*it);
-					}
-					else if ((('{' == *it) || (',' == *it) || ('}' == *it)) && array_check)
-					{
-						write_buffer.push_back(*it);
-					}
-					else if (!('{' == *it) && !(',' == *it) && !('}' == *it))
-					{
-						write_buffer.push_back(*it);
-					}
-				}
-				write_buffer.shrink_to_fit();
-
-				if (text_write.is_open())
-				{
-					text_write.write(write_buffer.data(), write_buffer.size());
-				}
-
-				text_write.close();
-
-				json_dump.clear();
-				json_dump.shrink_to_fit();
-				write_buffer.clear();
-				write_buffer.shrink_to_fit();
-			}
-			catch (const nlohmann::json::parse_error&)
-			{
-				std::cerr << "json parse error" << std::endl;
-				return false;
-			}
-			catch (const nlohmann::json::invalid_iterator&)
-			{
-				std::cerr << "json invalid_iterator error" << std::endl;
-				return false;
-			}
-			catch (const nlohmann::json::type_error&)
-			{
-				std::cerr << "json type error" << std::endl;
-				return false;
-			}
-			catch (const nlohmann::json::out_of_range&)
-			{
-				std::cerr << "json out_of_range error" << std::endl;
-				return false;
-			}
-			catch (const nlohmann::json::other_error&)
-			{
-				std::cerr << "json other error" << std::endl;
-				return false;
-			}
-
-			return true;
-		}
-
-		inline bool json_read_from_file(const char* name, nlohmann::json& json_arg)
-		{
-			std::fstream text_read;
-			text_read.open(name, std::fstream::in | std::fstream::binary);
-
-			if (!text_read.is_open())
-			{
-				return false;
-			}
-
-			text_read.seekg(0, std::fstream::end);
-			std::streamsize size = text_read.tellg();
-			text_read.seekg(0, std::fstream::beg);
-
-			std::vector<char> read_buffer(size);
-			text_read.read(read_buffer.data(), size);
-
-			text_read.close();
-
-			try
-			{
-				json_arg = nlohmann::json::parse(read_buffer);
-			}
-			catch (const nlohmann::json::parse_error&)
-			{
-				std::cerr << "json parse error" << std::endl;
-				return false;
-			}
-			catch (const nlohmann::json::invalid_iterator&)
-			{
-				std::cerr << "json invalid_iterator error" << std::endl;
-				return false;
-			}
-			catch (const nlohmann::json::type_error&)
-			{
-				std::cerr << "json type error" << std::endl;
-				return false;
-			}
-			catch (const nlohmann::json::out_of_range&)
-			{
-				std::cerr << "json out_of_range error" << std::endl;
-				return false;
-			}
-			catch (const nlohmann::json::other_error&)
-			{
-				std::cerr << "json other error" << std::endl;
-				return false;
-			}
-
-			read_buffer.clear();
-			read_buffer.shrink_to_fit();
-
-			return true;
-		}
-
-	}
-}
-
 soslab::LidarImpl::LidarImpl() :
 	dataCallback(nullptr),
 	areaCallback(nullptr),
@@ -424,7 +268,12 @@ void soslab::LidarImpl::unregisterGetAreaCallBack()
 
 soslab::lidarType soslab::LidarImpl::getLidarType() const
 {
-	return lidarType::GL5;
+	return userParameter.lidarTypeValue;
+}
+
+soslab::lidarParameters soslab::LidarImpl::getParameters() const
+{
+	return userParameter;
 }
 
 bool soslab::LidarImpl::getScene(std::shared_ptr<soslab::FrameData>& scene) const
@@ -533,10 +382,10 @@ bool soslab::LidarImpl::getEthernetInfo(std::string& sensorIp, int& sensorPort, 
 	soslab::Message::GeneralMessage<bool> msg;
 	msg.data = true;
 
-	soslab::Message::GL5::EthernetInfoMessage outMsg;
+	soslab::Message::EthernetInfoMessage outMsg;
 
 	bool retval = sendRequest(req, msg, outMsg, 5000);
-	soslab::Message::GL5::EthernetInfoMessage* ethernetInfoMsg = static_cast<soslab::Message::GL5::EthernetInfoMessage*>(&outMsg);
+	soslab::Message::EthernetInfoMessage* ethernetInfoMsg = static_cast<soslab::Message::EthernetInfoMessage*>(&outMsg);
 	if (ethernetInfoMsg == nullptr)
 	{
 		return false;
@@ -562,30 +411,79 @@ bool soslab::LidarImpl::setEthernetInfo(const std::string& sensorIp, int sensorP
 	}
 	if (!sensorInterface->supports(Feature::EthernetInfo)) return false;
 
-	std::string currentSensorIp;
-	int currentSensorPort;
-	std::string currentPcIp;
-	int currentPcPort;
-	std::string currentSubnetMask;
-	std::string currentGatewayAddr;
-	std::string currentMacAddr;
+	if (!soslab::utill::parseIpv4(sensorIp))
+	{
+		std::cerr << "Invalid sensor IP: " << sensorIp << "\n";
+		return false;
+	}
 
-	getEthernetInfo(currentSensorIp, currentSensorPort, currentPcIp, currentPcPort, currentSubnetMask, currentGatewayAddr, currentMacAddr);
+	if (!soslab::utill::parseIpv4(pcIp))
+	{
+		std::cerr << "Invalid PC IP: " << pcIp << "\n";
+		return false;
+	}
 
-	Request req;
-	req.feature = Feature::EthernetInfo;
-	req.mode = SetMode::Set;
+	if (!soslab::utill::isValidPort(sensorPort, false))
+	{
+		std::cerr << "Invalid sensor port: " << sensorPort << "\n";
+		return false;
+	}
 
-	soslab::Message::GL5::EthernetInfoMessage msg;
-	msg.sensorIp = sensorIp;
-	msg.pcIp = pcIp;
-	msg.subnetMask = subnetMask;
-	msg.gatewayAddr = gatewayAddr;
-	msg.macAddr = currentMacAddr;
-	msg.pcPort = pcPort;
-	msg.sensorPort = sensorPort;
+	if (!soslab::utill::isValidPort(pcPort, true))
+	{
+		std::cerr << "Invalid PC port: " << pcPort << "\n";
+		return false;
+	}
 
-	bool retval = sendRequest(req, msg, 5000);
+	if (!soslab::utill::isValidSubnetMask(subnetMask))
+	{
+		std::cerr << "Invalid subnet mask: " << subnetMask << "\n";
+		return false;
+	}
+
+	if (!soslab::utill::parseIpv4(gatewayAddr))
+	{
+		std::cerr << "Invalid gateway address: " << gatewayAddr << "\n";
+		return false;
+	}
+
+	std::string currentSensorIp, currentPcIp, currentSubnetMask, currentGatewayAddr, currentMacAddr;
+	int currentSensorPort, currentPcPort;
+	bool glSeries = sensorInterface->type() == soslab::lidarType::GL5 || sensorInterface->type() == soslab::lidarType::GL3;
+	if (glSeries)
+	{
+		getEthernetInfo(currentSensorIp, currentSensorPort, currentPcIp, currentPcPort, currentSubnetMask, currentGatewayAddr, currentMacAddr);
+	}
+
+	bool retval = false;
+	{
+		Request req;
+		req.feature = Feature::EthernetInfo;
+		req.mode = SetMode::Set;
+
+		soslab::Message::EthernetInfoMessage msg;
+		msg.sensorIp = sensorIp;
+		msg.pcIp = pcIp;
+		msg.subnetMask = subnetMask;
+		msg.gatewayAddr = gatewayAddr;
+		msg.macAddr = currentMacAddr;
+		msg.pcPort = pcPort;
+		msg.sensorPort = sensorPort;
+
+		retval = sendRequest(req, msg, 5000);
+	}
+
+	if (retval && !glSeries)
+	{
+		Request req;
+		req.feature = Feature::SaveSetting;
+		req.mode = SetMode::Set;
+
+		soslab::Message::GeneralMessage<std::string> msg;
+		msg.data = "json_save";
+
+		retval = sendRequest(req, msg, 15000);
+	}
 
 	return retval;
 }
@@ -972,6 +870,76 @@ bool soslab::LidarImpl::compareAllAreaWithSensor(std::vector<bool>& compareResul
 /* ************** */
 /* MLX interfaces */
 /* ************** */
+
+bool soslab::LidarImpl::setFps10Enable(bool enable)
+{
+	if (!runtime_ || !sensorInterface) return false;
+	if (!sensorInterface->supports(Feature::Fps10)) return false;
+
+	Request req;
+	req.feature = Feature::Fps10;
+
+	soslab::Message::GeneralMessage<bool> msg;
+	msg.data = enable;
+
+	return sendRequest(req, msg, 5000);
+}
+
+bool soslab::LidarImpl::setAmbientEnable(bool enable)
+{
+	if (!runtime_ || !sensorInterface) return false;
+	if (!sensorInterface->supports(Feature::AmbientEnable)) return false;
+
+	Request req;
+	req.feature = Feature::AmbientEnable;
+
+	soslab::Message::GeneralMessage<bool> msg;
+	msg.data = enable;
+
+	return sendRequest(req, msg, 5000);
+}
+
+bool soslab::LidarImpl::setDepthEnable(bool enable)
+{
+	if (!runtime_ || !sensorInterface) return false;
+	if (!sensorInterface->supports(Feature::DepthEnable)) return false;
+
+	Request req;
+	req.feature = Feature::DepthEnable;
+
+	soslab::Message::GeneralMessage<bool> msg;
+	msg.data = enable;
+
+	return sendRequest(req, msg, 5000);
+}
+
+bool soslab::LidarImpl::setIntensityEnable(bool enable)
+{
+	if (!runtime_ || !sensorInterface) return false;
+	if (!sensorInterface->supports(Feature::IntensityEnable)) return false;
+
+	Request req;
+	req.feature = Feature::IntensityEnable;
+
+	soslab::Message::GeneralMessage<bool> msg;
+	msg.data = enable;
+
+	return sendRequest(req, msg, 5000);
+}
+
+bool soslab::LidarImpl::setMultiEchoEnable(bool enable)
+{
+	if (!runtime_ || !sensorInterface) return false;
+	if (!sensorInterface->supports(Feature::MultiEchoEnable)) return false;
+
+	Request req;
+	req.feature = Feature::MultiEchoEnable;
+
+	soslab::Message::GeneralMessage<bool> msg;
+	msg.data = enable;
+
+	return sendRequest(req, msg, 5000);
+}
 
 bool soslab::LidarImpl::getAlarm(soslab::AreaAlarmData& alarm)
 {

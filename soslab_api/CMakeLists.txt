@@ -19,6 +19,7 @@ set(LIDAR_INTERNAL_SOURCES
 set(LIDAR_INTERNAL_HEADERS
     internal/LidarImpl.h
     ${UTILL_INCLUDE_DIR}/GeneralMessage.h
+    ${UTILL_INCLUDE_DIR}/helperFunctions.h
 )
 
 source_group("internal/Headers" FILES ${LIDAR_INTERNAL_HEADERS})
@@ -29,7 +30,9 @@ source_group("public/Sources" FILES ${LIDAR_PUBLIC_SOURCES})
 add_library(Lidar SHARED ${LIDAR_PUBLIC_HEADERS} ${LIDAR_PUBLIC_SOURCES} ${LIDAR_INTERNAL_HEADERS} ${LIDAR_INTERNAL_SOURCES})
 
 target_compile_definitions(Lidar PRIVATE SOSLAB_API_EXPORTS)
-set_target_properties(Lidar PROPERTIES OUTPUT_NAME ${LIDAR_LIB_NAME})
+set_target_properties(Lidar PROPERTIES OUTPUT_NAME ${LIDAR_LIB_NAME}
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN YES)
 
 target_include_directories(Lidar 
     PUBLIC
@@ -46,7 +49,12 @@ target_include_directories(Lidar
 )
 target_link_libraries(Lidar PRIVATE Sensor Netlink FileIO LidarRuntime Win32Lib)
 
+if(UNIX AND NOT APPLE)
+    target_link_libraries(Lidar PRIVATE "-Wl,--exclude-libs,ALL")
+endif()
+
 add_custom_command(TARGET Lidar POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E remove_directory "${OUTPUT_ROOT_DIR}/include"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${OUTPUT_ROOT_DIR}/include"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/include/Lidar.h"
